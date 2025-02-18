@@ -1,5 +1,6 @@
 import argparse
 import os
+
 from trainer import *
 
 from unet import Unet1D
@@ -11,22 +12,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="DDPM1d")
     
     # Trainer
-    parser.add_argument("--data_path", type=str, default="E:\ECG\CPSC2018\Dataset\PTB_XL")
-    parser.add_argument("--train_steps", type=int, default=10000,
-                        help='Epoch to train diffusion model')
+    parser.add_argument("--data_path", type=str, default="C:\\Dataset\\PTB_XL")
+    parser.add_argument("--train_steps", type=int, default=20000)
     parser.add_argument("--sample_interval", type=int, default=5000)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--result_path", type=str, default='.\results')
     
     # U-Net
-    parser.add_argument("--init_dim", type=int, default=16,
-                        help='channels after init_conv')
-    parser.add_argument("--out_dim", type=int, default=9,
-                        help='channels of the final output')
+    parser.add_argument("--init_dim", type=int, default=16)
+    parser.add_argument("--out_dim", type=int, default=9)
     parser.add_argument("--dim", type=int, default=16)
-    parser.add_argument("--in_c", type=int, default=12, 
-                        help='channels before init_conv')
+    parser.add_argument("--in_c", type=int, default=12)
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--condition", type=bool, default=True)
     parser.add_argument("--is_random_pe", type=bool, default=False)
@@ -56,23 +53,24 @@ if __name__ == '__main__':
                                 auto_normalize=args.normalize
                                 )
     
-    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, 
-                                ref_path=None)
+    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, ref_path='.\database')
     
     trainer = Trainer1D(diffusion_model=model, 
                         dataset=train_set, 
-                        train_batch_size=args.batch_size, 
+                        train_batch_size=args.batch_size,
+                        train_num_steps=args.train_steps,
                         train_lr=args.lr,
                         save_and_sample_every=args.sample_interval
                         )
     
     trainer.train()
-    
-    output = torch.load(str('./results/output_{}.pt'.format(int(args.train_steps / args.sample_interval)))).cpu()
+
+    output = torch.load(str('./results/output_{}.pt'.format(int(args.train_steps / args.sample_interval))))
+    os.makedirs('./results/figures', exist_ok=True)
 
     lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
 
-    for idx, (sample, target) in enumerate(zip(output['samples'], output['target'])):
+    for idx, (sample, target) in enumerate(zip(output['samples'].cpu(), output['target'].cpu())):
         plt.figure(figsize=(40, 16))
         for i in range(9):
             plt.subplot(3, 3, i + 1)
@@ -85,5 +83,5 @@ if __name__ == '__main__':
         plt.suptitle("Generated ECG Signals")
 
         plt.tight_layout()
-        os.makedirs('./results/figures', exist_ok=True)
+
         plt.savefig(f'./results/figures/output_{idx}_{args.train_steps}.png')

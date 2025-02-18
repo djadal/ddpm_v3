@@ -1,4 +1,5 @@
 from functools import partial
+import numpy as np
 
 from torch import nn
 from torch.nn import Module, ModuleList
@@ -81,9 +82,28 @@ class Unet1D(Module):
             ]))
 
         mid_dim = dims[-1]
+
         self.mid_block1 = resnet_block(mid_dim, mid_dim)
-        self.mid_attn = Residual(PreNorm(mid_dim, Attention(mid_dim, dim_head = attn_dim_head, heads = attn_heads)))
+        self.target_dim = 128
+        self.mid_attn = Residual(PreNorm(mid_dim, ReferenceModulatedCrossAttention(dim=mid_dim)))
         self.mid_block2 = resnet_block(mid_dim, mid_dim)
+        self.embed_layer = nn.Embedding(
+            num_embeddings=128, embedding_dim=64
+        )  # 将离散的目标转为连续的变量
+
+        self.refconv = nn.Conv1d(
+            in_channels=9,  # 输入序列长度
+            out_channels=128,  # 输出序列长度
+            kernel_size=1,  # 卷积核大小
+            stride=1,  # 步长
+            padding=0  # 填充
+        )
+
+        # 定义线性层，将特征维度从 1024 降为 128
+        self.reflinear = nn.Linear(
+            in_features=1024,  # 输入特征维度
+            out_features=128  # 输出特征维度
+        )
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
             is_last = ind == (len(in_out) - 1)
@@ -93,7 +113,7 @@ class Unet1D(Module):
                 resnet_block(dim_out + dim_in, dim_out),
                 Residual(PreNorm(dim_out, LinearAttention(dim_out))),
                 Upsample(dim_out, dim_in) if not is_last else  nn.Conv1d(dim_out, dim_in, 3, padding = 1)
-            ]))
+                ]))
 
         default_out_dim = channels * (1 if not learned_variance else 2)
         self.out_dim = default(out_dim, default_out_dim)
@@ -101,7 +121,39 @@ class Unet1D(Module):
         self.final_res_block = resnet_block(init_dim * 2, init_dim)
         self.final_conv = nn.Conv1d(init_dim, self.out_dim, 1)
 
-    def forward(self, x, time, x_self_cond = None):
+
+    def time_embedding(self, d_model=64, device='cpu'):
+        pe = torch.zeros(16, 128, d_model).to(device)  # 形状（B,L,128)
+
+        pos = np.ones((16, 128))
+        pos = torch.tensor(pos, dtype=torch.float32).to(device)
+
+        position = pos.unsqueeze(2)  # 【B，L，1】
+        div_term = 1 / torch.pow(
+            10000.0, torch.arange(0, d_model, 2).to(device) / d_model
+        )
+        pe[:, :, 0::2] = torch.sin(position * div_term)  # 只给偶数维度地进行赋值
+        pe[:, :, 1::2] = torch.cos(position * div_term)
+        return pe  # 【B，L，64】
+
+
+    def get_side_info(self, device):
+        B = 16
+        K = 128
+        L = 128  # B,321,126
+
+        time_embed = self.time_embedding(device = device)  # (B,L,emb) 时间嵌入
+        # time_embed = time_embed.unsqueeze(2).expand(-1, -1, K, -1)    #扩充到k个 (B,L,K,emb)
+        feature_embed = self.embed_layer(
+            torch.arange(self.target_dim).to(device)
+        )  # (K,emb)
+        feature_embed = feature_embed.unsqueeze(0).expand(B, -1, -1)  # 把这个向量扩张成（B,K,64）
+
+        side_info = torch.cat([time_embed, feature_embed], dim=-1)  # (B,L,*)  （B.L.321,256)
+
+        return side_info
+
+    def forward(self, x, time, x_self_cond = None, reference = None):
         # x -> (b, c, l)
         if self.self_condition:
             # x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
@@ -125,7 +177,12 @@ class Unet1D(Module):
             x = downsample(x)
 
         x = self.mid_block1(x, t)
-        x = self.mid_attn(x)
+        side_info = self.get_side_info(x.device)
+        reference = self.refconv(reference)
+        reference = self.reflinear(reference)
+
+        x = self.mid_attn(x, reference=reference, cond_info=side_info)
+
         x = self.mid_block2(x, t)
 
         for block1, block2, attn, upsample in self.ups:

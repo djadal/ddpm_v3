@@ -16,6 +16,7 @@ from utils import num_to_groups, has_int_squareroot, cycle
 
 import matplotlib.pyplot as plt
 
+
 # trainer class
 
 def plot_loss_curve(train_losses, val_losses=None, save_path=None):
@@ -30,35 +31,35 @@ def plot_loss_curve(train_losses, val_losses=None, save_path=None):
     plt.grid(True, linestyle='--', alpha=0.6)
     if save_path is not None:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    plt.show()
+
 
 class Trainer1D(object):
     def __init__(
-        self,
-        diffusion_model,
-        dataset: Dataset,
-        *,
-        train_batch_size = 16,
-        gradient_accumulate_every = 1,
-        train_lr = 1e-4,
-        train_num_steps = 100000,
-        ema_update_every = 10,
-        ema_decay = 0.995,
-        adam_betas = (0.9, 0.99),
-        save_and_sample_every = 1000,
-        num_samples = 16,
-        results_folder = './results',
-        amp = False,
-        mixed_precision_type = 'fp16',
-        split_batches = True,
-        max_grad_norm = 1.
+            self,
+            diffusion_model,
+            dataset: Dataset,
+            *,
+            train_batch_size=16,
+            gradient_accumulate_every=1,
+            train_lr=1e-4,
+            train_num_steps=100000,
+            ema_update_every=10,
+            ema_decay=0.995,
+            adam_betas=(0.9, 0.99),
+            save_and_sample_every=1000,
+            num_samples=16,
+            results_folder='./results',
+            amp=False,
+            mixed_precision_type='fp16',
+            split_batches=True,
+            max_grad_norm=1.
     ):
         super().__init__()
 
         # accelerator
         self.accelerator = Accelerator(
-            split_batches = split_batches,
-            mixed_precision = mixed_precision_type if amp else 'no'
+            split_batches=split_batches,
+            mixed_precision=mixed_precision_type if amp else 'no'
         )
 
         # model
@@ -78,20 +79,20 @@ class Trainer1D(object):
 
         # dataset and dataloader
 
-        dl = DataLoader(dataset, batch_size = train_batch_size, shuffle = True, pin_memory = True, num_workers = cpu_count())
+        dl = DataLoader(dataset, batch_size=train_batch_size, shuffle=True, pin_memory=True, num_workers=cpu_count())
         dl = self.accelerator.prepare(dl)
         self.dl = cycle(dl)
 
         # optimizer
-        self.opt = Adam(diffusion_model.parameters(), lr = train_lr, betas = adam_betas)
+        self.opt = Adam(diffusion_model.parameters(), lr=train_lr, betas=adam_betas)
 
         # for logging results in a folder periodically
         if self.accelerator.is_main_process:
-            self.ema = EMA(diffusion_model, beta = ema_decay, update_every = ema_update_every)
+            self.ema = EMA(diffusion_model, beta=ema_decay, update_every=ema_update_every)
             self.ema.to(self.device)
 
         self.results_folder = Path(results_folder)
-        self.results_folder.mkdir(exist_ok = True)
+        self.results_folder.mkdir(exist_ok=True)
 
         # step counter state
         self.step = 0
@@ -116,13 +117,12 @@ class Trainer1D(object):
         }
 
         torch.save(data, str(self.results_folder / f'model_{milestone}.pt'))
-        
+
         output = {
             'samples': samples,
             'target': target,
         }
         torch.save(output, str(self.results_folder / f'output_{milestone}.pt'))
-        
 
     def load(self, milestone):
         accelerator = self.accelerator
@@ -149,7 +149,7 @@ class Trainer1D(object):
         device = accelerator.device
         loss_list = []
 
-        with tqdm(initial = self.step, total = self.train_num_steps, disable = not accelerator.is_main_process) as pbar:
+        with tqdm(initial=self.step, total=self.train_num_steps, disable=not accelerator.is_main_process) as pbar:
 
             while self.step < self.train_num_steps:
                 self.model.train()
@@ -157,11 +157,11 @@ class Trainer1D(object):
                 total_loss = 0.
 
                 for _ in range(self.gradient_accumulate_every):
-                    cond, target = next(self.dl)
-                    cond, target = cond.to(device), target.to(device)
+                    cond, target, ref = next(self.dl)
+                    cond, target, ref = cond.to(device), target.to(device), ref.to(device)
 
                     with self.accelerator.autocast():
-                        loss = self.model(target, cond)
+                        loss = self.model(target, cond, ref)
                         loss = loss / self.gradient_accumulate_every
                         total_loss += loss.item()
 
@@ -182,15 +182,16 @@ class Trainer1D(object):
                 if accelerator.is_main_process:
                     self.ema.update()
 
-                    if self.step != 0 and (self.step+1) % self.save_and_sample_every == 0:
+                    if self.step != 0 and (self.step + 1) % self.save_and_sample_every == 0:
                         self.ema.ema_model.eval()
 
                         with torch.no_grad():
-                            cond, target = next(self.dl)
-                            cond, target = cond.to(device), target.to(device)
+                            cond, target, ref = next(self.dl)
+                            cond, target, ref = cond.to(device), target.to(device), ref.to(device)
                             milestone = self.step // self.save_and_sample_every
                             batches = num_to_groups(self.num_samples, self.batch_size)
-                            all_samples_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n, condition=cond), batches))
+                            all_samples_list = list(
+                                map(lambda n: self.ema.ema_model.sample(batch_size=n, condition=cond, reference=ref), batches))
 
                         all_samples = torch.cat(all_samples_list, dim=0)
 
@@ -200,5 +201,4 @@ class Trainer1D(object):
 
         plot_loss_curve(loss_list, save_path=str(self.results_folder / f'loss_curve.png'))
         accelerator.print('training complete')
-        
-        
+

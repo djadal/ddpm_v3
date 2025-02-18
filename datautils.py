@@ -105,7 +105,7 @@ class Dataset_ECG_VIT(Dataset):
             ref_vec = []
             for i in self.reference[idx]:
                 ref_vec.append(self.predict[i])
-            ref_vec = torch.cat(ref_vec, dim=0) # -> (ref_num, 9, seq_length)
+            ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
             ref_vec = ref_vec[0]
             
             # return torch.cat([self.seq[idx], ref_vec], dim=1), self.all[idx][[0, 1, 6, 2, 3, 4, 5, 7, 8, 9, 10, 11], :]
