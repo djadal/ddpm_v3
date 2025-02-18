@@ -33,7 +33,8 @@ class Unet1D(Module):
 
         self.channels = channels
         self.self_condition = self_condition
-        input_channels = channels * (2 if self_condition else 1)
+        # input_channels = channels * (2 if self_condition else 1)
+        input_channels = channels
 
         init_dim = default(init_dim, dim)
         self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding = 3)

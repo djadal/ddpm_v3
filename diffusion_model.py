@@ -32,7 +32,7 @@ class GaussianDiffusion1D(Module):
     ):
         super().__init__()
         self.model = model
-        self.channels = self.model.channels
+        self.channels = self.model.out_dim
         self.self_condition = self.model.self_condition
 
         self.seq_length = seq_length
@@ -173,7 +173,7 @@ class GaussianDiffusion1D(Module):
         x_start = preds.pred_x_start
 
         if clip_denoised:
-            x_start.clamp_(-5., 5.)
+            x_start.clamp_(-10., 10.)
 
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start = x_start, x_t = x, t = t)
         return model_mean, posterior_variance, posterior_log_variance, x_start

@@ -1,4 +1,5 @@
 import argparse
+import os
 from trainer import *
 
 from unet import Unet1D
@@ -11,17 +12,21 @@ if __name__ == '__main__':
     
     # Trainer
     parser.add_argument("--data_path", type=str, default="E:\ECG\CPSC2018\Dataset\PTB_XL")
-    parser.add_argument("--train_steps", type=int, default=10000)
+    parser.add_argument("--train_steps", type=int, default=10000,
+                        help='Epoch to train diffusion model')
     parser.add_argument("--sample_interval", type=int, default=5000)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--result_path", type=str, default='.\results')
     
     # U-Net
-    parser.add_argument("--init_dim", type=int, default=16)
-    parser.add_argument("--out_dim", type=int, default=9)
+    parser.add_argument("--init_dim", type=int, default=16,
+                        help='channels after init_conv')
+    parser.add_argument("--out_dim", type=int, default=9,
+                        help='channels of the final output')
     parser.add_argument("--dim", type=int, default=16)
-    parser.add_argument("--in_c", type=int, default=9)
+    parser.add_argument("--in_c", type=int, default=12, 
+                        help='channels before init_conv')
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--condition", type=bool, default=True)
     parser.add_argument("--is_random_pe", type=bool, default=False)
@@ -51,7 +56,8 @@ if __name__ == '__main__':
                                 auto_normalize=args.normalize
                                 )
     
-    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, ref_path='E:\ECG\denoising-diffusion-pytorch-main\ddpm_v2\database')
+    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, 
+                                ref_path=None)
     
     trainer = Trainer1D(diffusion_model=model, 
                         dataset=train_set, 
@@ -62,24 +68,22 @@ if __name__ == '__main__':
     
     trainer.train()
     
-    output = torch.load(str('./results/samples-{}.pt'.format(int(args.train_steps / args.sample_interval)))).cpu()
-
-    batch_sample = output['samples']
-    bacth_target = output['target']
+    output = torch.load(str('./results/output_{}.pt'.format(int(args.train_steps / args.sample_interval)))).cpu()
 
     lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
 
-for idx, (sample, target) in enumerate(batch_sample, bacth_target):
-    plt.figure(figsize=(40, 16))
-    for i in range(9):
-        plt.subplot(3, 3, i + 1)
-        plt.plot(sample[i], label=f'Sample_{lead_names[i]}', color='red', linewidth=1)
-        plt.plot(target[i], label=f'Target_{lead_names[i]}', color='blue', linewidth=1)
-        plt.legend(loc="upper right")
-        plt.ylabel("Amplitude")
+    for idx, (sample, target) in enumerate(zip(output['samples'], output['target'])):
+        plt.figure(figsize=(40, 16))
+        for i in range(9):
+            plt.subplot(3, 3, i + 1)
+            plt.plot(sample[i], label=f'Sample_{lead_names[i]}', color='red', linewidth=1)
+            plt.plot(target[i], label=f'Target_{lead_names[i]}', color='blue', linewidth=1)
+            plt.legend(loc="upper right")
+            plt.ylabel("Amplitude")
 
-    plt.xlabel("Time Steps")
-    plt.suptitle("Generated ECG Signals")
+        plt.xlabel("Time Steps")
+        plt.suptitle("Generated ECG Signals")
 
-    plt.tight_layout()
-    plt.savefig('output_{}_{}.png'.format(i, args.train_steps))
+        plt.tight_layout()
+        os.makedirs('./results/figures', exist_ok=True)
+        plt.savefig(f'./results/figures/output_{idx}_{args.train_steps}.png')
