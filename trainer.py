@@ -104,7 +104,7 @@ class Trainer1D(object):
     def device(self):
         return self.accelerator.device
 
-    def save(self, milestone, samples):
+    def save(self, milestone, samples, target):
         if not self.accelerator.is_local_main_process:
             return
 
@@ -117,7 +117,13 @@ class Trainer1D(object):
         }
 
         torch.save(data, str(self.results_folder / f'model_{milestone}.pt'))
-        torch.save(samples, str(self.results_folder / f'samples_{milestone}.pt'))
+        
+        output = {
+            'samples': samples,
+            'target': target,
+        }
+        torch.save(output, str(self.results_folder / f'output_{milestone}.pt'))
+        
 
     def load(self, milestone):
         accelerator = self.accelerator
@@ -180,24 +186,19 @@ class Trainer1D(object):
                         self.ema.ema_model.eval()
 
                         with torch.no_grad():
-                            cond, data = next(self.dl)
-                            cond, data = cond.to(device), data.to(device)
+                            cond, target = next(self.dl)
+                            cond, target = cond.to(device), target.to(device)
                             milestone = self.step // self.save_and_sample_every
                             batches = num_to_groups(self.num_samples, self.batch_size)
                             all_samples_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n, condition=cond), batches))
 
                         all_samples = torch.cat(all_samples_list, dim=0)
-                        all_samples = torch.cat((all_samples_list.unsqueeze(0), data.unsqueeze(0)),dim=0)
 
-                        # torch.save(all_samples, str(self.results_folder / f'sample-{milestone}.png'))
-                        self.save(milestone, all_samples)
+                        self.save(milestone, all_samples, target)
 
                 pbar.update(1)
 
         plot_loss_curve(loss_list, save_path=str(self.results_folder / f'loss_curve.png'))
         accelerator.print('training complete')
-   
-    # os.makedirs(args.result_path, exist_ok=True)
-    # torch.save(samples, os.path.join(args.result_path, 'samples.pt'))
-    # torch.save(model.state_dict(), os.path.join(args.result_path, 'model.pth'))
-    # trainer.save(args.train_steps)
+        
+        

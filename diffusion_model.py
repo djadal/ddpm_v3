@@ -172,8 +172,8 @@ class GaussianDiffusion1D(Module):
         preds = self.model_predictions(x, t, x_self_cond)
         x_start = preds.pred_x_start
 
-        # if clip_denoised:
-        #     x_start.clamp_(-1., 1.)
+        if clip_denoised:
+            x_start.clamp_(-5., 5.)
 
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start = x_start, x_t = x, t = t)
         return model_mean, posterior_variance, posterior_log_variance, x_start
