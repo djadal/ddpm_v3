@@ -61,3 +61,28 @@ if __name__ == '__main__':
                         )
     
     trainer.train()
+    
+    all_seq = torch.load(str('./results/samples-{}.pt'.format(int(args.train_steps / args.sample_interval)))).cpu()
+
+    sample_seq = all_seq[0]
+    data_seq = all_seq[1][0]
+
+    sample_idx = 0
+    ecg_data = sample_seq[sample_idx]
+
+    lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
+
+    plt.figure(figsize=(40, 16))
+    for i in range(9):
+        plt.subplot(3, 3, i + 1)
+        plt.plot(ecg_data[i], label=f'Lead {lead_names[i]}', color='red', linewidth=0.8)
+        plt.plot(data_seq[i], label=f'Lead {lead_names[i]}', color='blue', linewidth=0.8)
+        plt.legend(loc="upper right")
+        plt.ylabel("Amplitude")
+        plt.xticks([])
+
+    plt.xlabel("Time Steps (2500 samples)")
+    plt.suptitle("Generated 12-Lead ECG Signals")
+
+    plt.tight_layout()
+    plt.savefig('sample_{}.png'.format(args.train_steps))
