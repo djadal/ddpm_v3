@@ -187,6 +187,7 @@ class Trainer1D(object):
                             all_samples_list = list(map(lambda n: self.ema.ema_model.sample(batch_size=n, condition=cond), batches))
 
                         all_samples = torch.cat(all_samples_list, dim=0)
+                        all_samples = torch.cat((all_samples_list.unsqueeze(0), data.unsqueeze(0)),dim=0)
 
                         # torch.save(all_samples, str(self.results_folder / f'sample-{milestone}.png'))
                         self.save(milestone, all_samples)
