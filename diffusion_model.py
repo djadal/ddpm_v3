@@ -195,7 +195,7 @@ class GaussianDiffusion1D(Module):
 
     @torch.no_grad()
     def p_sample_loop(self, shape, condition=None, reference=None):
-        batch, device = shape[0], self.betas.device
+        device =self.betas.device
 
         img = torch.randn(shape, device=device)
 
@@ -279,8 +279,8 @@ class GaussianDiffusion1D(Module):
         """
         Diffusion Process,根据xt所服从的高斯分布的mean和var，求出xt, 前向加噪过程
         Params:
-            x_start：原始数据
-            t：某一步time_step
+            x_start:原始数据
+            t:某一步time_step
         Return:
             xt: 第t时刻加完噪声的数据
         """

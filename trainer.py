@@ -3,6 +3,7 @@ from tqdm import tqdm
 from multiprocessing import cpu_count
 
 import torch
+import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
 
@@ -144,6 +145,30 @@ class Trainer1D(object):
         if exists(self.accelerator.scaler) and exists(data['scaler']):
             self.accelerator.scaler.load_state_dict(data['scaler'])
 
+    from tqdm import tqdm
+
+    def evaluate(self, dataset, criterion):
+        accelerator = self.accelerator
+        device = accelerator.device
+        self.ema.ema_model.eval()
+
+        eva_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
+        eva_loader = accelerator.prepare(eva_loader)
+
+        with torch.no_grad():
+            eva_loss = 0.
+
+            for cond, target, ref in tqdm(eva_loader, desc="Evaluating", leave=False):
+                cond, target, ref = cond.to(device), target.to(device), ref.to(device)
+            
+                sample = self.ema.ema_model.sample(batch_size=cond.shape[0], condition=cond, reference=ref)
+                loss = criterion(sample, target)
+                eva_loss += loss.item()
+
+        eva_loss /= len(eva_loader)
+
+        accelerator.print(f'evaluation loss: {eva_loss:.4f}')
+
     def train(self):
         accelerator = self.accelerator
         device = accelerator.device
@@ -188,7 +213,7 @@ class Trainer1D(object):
                         with torch.no_grad():
                             cond, target, ref = next(self.dl)
                             cond, target, ref = cond.to(device), target.to(device), ref.to(device)
-                            milestone = self.step // self.save_and_sample_every
+                            milestone = self.step // self.save_and_sample_every + 1
                             batches = num_to_groups(self.num_samples, self.batch_size)
                             all_samples_list = list(
                                 map(lambda n: self.ema.ema_model.sample(batch_size=n, condition=cond, reference=ref), batches))

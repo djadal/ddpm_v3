@@ -34,6 +34,10 @@ if __name__ == '__main__':
     parser.add_argument("--objective", type=str, default="pred_noise", choices=["pred_noise", "pred_x0", "pred_v"])
     parser.add_argument("--beta", type=str, default="cosine", choices=["linear", "cosine"])
     parser.add_argument("--normalize", type=bool, default=False)
+
+    # Evaluate
+    parser.add_argument("--criterion", type=str, default='nn.MSELoss()')
+    
     
     args = parser.parse_args()
     
