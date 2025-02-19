@@ -102,11 +102,12 @@ class Dataset_ECG_VIT(Dataset):
         if self.reference == None:
             return self.seq[idx], self.predict[idx]
         else:
-            ref_vec = []
-            for i in self.reference[idx]:
-                ref_vec.append(self.predict[i])
-            ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
-            ref_vec = ref_vec[0]
+            ref_vec = self.reference[idx]
+            # ref_vec = []
+            # for i in self.reference[idx]:
+            #     ref_vec.append(self.predict[i])
+            # ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
+            # ref_vec = ref_vec[0]
             
             # return torch.cat([self.seq[idx], ref_vec], dim=1), self.all[idx][[0, 1, 6, 2, 3, 4, 5, 7, 8, 9, 10, 11], :]
             # ref_vec = torch.mean(ref_vec, dim=0) # 对3条ref取平均

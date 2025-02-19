@@ -7,6 +7,31 @@ from unet import Unet1D
 from diffusion_model import GaussianDiffusion1D
 from datautils import Dataset_ECG_VIT
 
+from VIT_encoder.ref import load_Config, Reference
+
+def plot_one_sample():
+    output = torch.load(str('./results/output_{}.pt'.format(int(args.train_steps / args.sample_interval))))
+    os.makedirs('./results/figures', exist_ok=True)
+
+    lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
+
+    for idx, (sample, target) in enumerate(zip(output['samples'].cpu(), output['target'].cpu())):
+        plt.figure(figsize=(40, 16))
+        for i in range(9):
+            plt.subplot(3, 3, i + 1)
+            plt.plot(sample[i], label=f'Sample_{lead_names[i]}', color='red', linewidth=1)
+            plt.plot(target[i], label=f'Target_{lead_names[i]}', color='blue', linewidth=1)
+            plt.legend(loc="upper right")
+            plt.ylabel("Amplitude")
+
+        plt.xlabel("Time Steps")
+        plt.suptitle("Generated ECG Signals")
+
+        plt.tight_layout()
+
+        plt.savefig(f'./results/figures/output_{idx}_{args.train_steps}.png')
+
+
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description="DDPM1d")
@@ -37,7 +62,32 @@ if __name__ == '__main__':
 
     # Evaluate
     parser.add_argument("--criterion", type=str, default='nn.MSELoss()')
-    
+    parser.add_argument('--task', type=str, default='ref', choices=['embedding', 'ref'])
+    parser.add_argument('--config_path',
+                        default="./VIT_encoder/configs/downstream/st_mem.yaml",
+                        type=str,
+                        metavar='FILE',
+                        help='YAML config file path')
+    parser.add_argument('--val_data_path',
+                        default="C:\\Dataset\\PTB_XL",
+                        type=str,
+                        metavar='PATH',
+                        help='Path of val dataset')
+    parser.add_argument('--encoder_path',
+                        default="./VIT_encoder/st_mem/encoder.pth",
+                        type=str,
+                        metavar='PATH',
+                        help='Pretrained encoder checkpoint')
+    parser.add_argument('--embedding_path',
+                        default="./VIT_encoder/st_mem/embedding.pt",
+                        type=str,
+                        metavar='PATH',
+                        help='Path to save embeddings')
+    parser.add_argument('--ref_path',
+                        default="./VIT_encoder/database/evaluate",
+                        type=str,
+                        metavar='PATH',
+                        help='Path to save references')
     
     args = parser.parse_args()
     
@@ -69,23 +119,5 @@ if __name__ == '__main__':
     
     trainer.train()
 
-    output = torch.load(str('./results/output_{}.pt'.format(int(args.train_steps / args.sample_interval))))
-    os.makedirs('./results/figures', exist_ok=True)
-
-    lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
-
-    for idx, (sample, target) in enumerate(zip(output['samples'].cpu(), output['target'].cpu())):
-        plt.figure(figsize=(40, 16))
-        for i in range(9):
-            plt.subplot(3, 3, i + 1)
-            plt.plot(sample[i], label=f'Sample_{lead_names[i]}', color='red', linewidth=1)
-            plt.plot(target[i], label=f'Target_{lead_names[i]}', color='blue', linewidth=1)
-            plt.legend(loc="upper right")
-            plt.ylabel("Amplitude")
-
-        plt.xlabel("Time Steps")
-        plt.suptitle("Generated ECG Signals")
-
-        plt.tight_layout()
-
-        plt.savefig(f'./results/figures/output_{idx}_{args.train_steps}.png')
+    plot_one_sample()
+    

@@ -1,5 +1,6 @@
 from pathlib import Path
 from tqdm import tqdm
+import random
 from multiprocessing import cpu_count
 
 import torch
@@ -145,9 +146,7 @@ class Trainer1D(object):
         if exists(self.accelerator.scaler) and exists(data['scaler']):
             self.accelerator.scaler.load_state_dict(data['scaler'])
 
-    from tqdm import tqdm
-
-    def evaluate(self, dataset, criterion):
+    def evaluate(self, dataset, criterion, num_batches=None):
         accelerator = self.accelerator
         device = accelerator.device
         self.ema.ema_model.eval()
@@ -155,18 +154,25 @@ class Trainer1D(object):
         eva_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
         eva_loader = accelerator.prepare(eva_loader)
 
+        eva_loader_list = list(eva_loader)
+
+        if num_batches is None or num_batches > len(eva_loader_list):
+            num_batches = len(eva_loader_list)
+
+        selected_batches = random.sample(eva_loader_list, num_batches)
+
         with torch.no_grad():
             eva_loss = 0.
 
-            for cond, target, ref in tqdm(eva_loader, desc="Evaluating", leave=False):
+            for cond, target, ref in tqdm(selected_batches, desc="Evaluating", leave=False):
                 cond, target, ref = cond.to(device), target.to(device), ref.to(device)
             
                 sample = self.ema.ema_model.sample(batch_size=cond.shape[0], condition=cond, reference=ref)
                 loss = criterion(sample, target)
                 eva_loss += loss.item()
 
-        eva_loss /= len(eva_loader)
-
+        eva_loss /= num_batches
+    
         accelerator.print(f'evaluation loss: {eva_loss:.4f}')
 
     def train(self):
