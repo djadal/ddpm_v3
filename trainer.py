@@ -126,6 +126,16 @@ class Trainer1D(object):
         }
         torch.save(output, str(self.results_folder / f'output_{milestone}.pt'))
 
+    def save_evaluation(self, samples, target):
+        if not self.accelerator.is_local_main_process:
+            return
+
+        output = {
+            'samples': samples,
+            'target': target,
+        }
+        torch.save(output, str(self.results_folder / 'evaluation.pt'))
+
     def load(self, milestone):
         accelerator = self.accelerator
         device = accelerator.device
@@ -168,6 +178,7 @@ class Trainer1D(object):
                 cond, target, ref = cond.to(device), target.to(device), ref.to(device)
             
                 sample = self.ema.ema_model.sample(batch_size=cond.shape[0], condition=cond, reference=ref)
+                self.save_evaluation(sample, target)
                 loss = criterion(sample, target)
                 eva_loss += loss.item()
 

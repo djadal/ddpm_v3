@@ -10,12 +10,14 @@ from trainer import Trainer1D
 from unet import Unet1D
 from diffusion_model import GaussianDiffusion1D
 from datautils import Dataset_ECG_VIT
+from utils import default
 
 from VIT_encoder.ref import load_Config, Reference
 
 def plot_one_sample(args):
-    output = torch.load(str('./results/output_{}.pt'.format(int(args.train_steps / args.sample_interval))))
-    os.makedirs('./results/figures', exist_ok=True)
+    # output = torch.load(str('./results/output_{}.pt'.format(int(args.train_steps / args.sample_interval))))
+    output = torch.load('./results/evaluate.pt')
+    os.makedirs('./results/figures/evaluation', exist_ok=True)
 
     lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
 
@@ -33,7 +35,8 @@ def plot_one_sample(args):
 
         plt.tight_layout()
 
-        plt.savefig(f'./results/figures/output_{idx}_{args.train_steps}.png')
+        # plt.savefig(f'./results/figures/output_{idx}_{args.train_steps}.png')
+        plt.savefig(f'./results/figures/evaluation/{idx}.png')
 
 
 if __name__ == '__main__':
@@ -113,7 +116,8 @@ if __name__ == '__main__':
                                 auto_normalize=args.normalize
                                 )
     
-    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, ref_path='.\database')
+    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, 
+                                ref_path='.\database')
     
     trainer = Trainer1D(diffusion_model=model, 
                         dataset=train_set, 
@@ -125,8 +129,12 @@ if __name__ == '__main__':
     
     trainer.train()
 
-    trainer.load(args.resume)
+    # trainer.load(args.resume)
     trainer.evaluate(dataset=train_set, criterion = criterion_dict[args.criterion], num_batches=10)
+
+    val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, 
+                              ref_path='.\database\evaluation')
+    trainer.evaluate(dataset=val_set, criterion = criterion_dict[args.criterion], num_batches=1)
 
     plot_one_sample(args)
     
