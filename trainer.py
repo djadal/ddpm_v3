@@ -1,10 +1,10 @@
 from pathlib import Path
 from tqdm import tqdm
 import random
+import os
 from multiprocessing import cpu_count
 
-import torch
-import torch.nn as nn
+
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
 
@@ -14,7 +14,7 @@ from einops.layers.torch import Rearrange
 from accelerate import Accelerator
 from ema_pytorch import EMA
 
-from utils import num_to_groups, has_int_squareroot, cycle
+from utils import num_to_groups, has_int_squareroot, cycle, path
 
 import matplotlib.pyplot as plt
 
@@ -96,6 +96,10 @@ class Trainer1D(object):
         self.results_folder = Path(results_folder)
         self.results_folder.mkdir(exist_ok=True)
 
+        self.model_dict_folder = path(self.results_folder, 'model_dicts')
+        self.outputs_folder = path(self.results_folder, 'outputs')
+        self.evaluation_folder = path(self.results_folder, 'evaluation')
+
         # step counter state
         self.step = 0
 
@@ -118,13 +122,13 @@ class Trainer1D(object):
             'scaler': self.accelerator.scaler.state_dict() if exists(self.accelerator.scaler) else None,
         }
 
-        torch.save(data, str(self.results_folder / f'model_{milestone}.pt'))
+        torch.save(data, str(self.model_dict_folder / f'model_{milestone}.pt'))
 
         output = {
             'samples': samples,
             'target': target,
         }
-        torch.save(output, str(self.results_folder / f'output_{milestone}.pt'))
+        torch.save(output, str(self.outputs_folder / f'output_{milestone}.pt'))
 
     def save_evaluation(self, samples, target):
         if not self.accelerator.is_local_main_process:
@@ -134,9 +138,9 @@ class Trainer1D(object):
             'samples': samples,
             'target': target,
         }
-        torch.save(output, str(self.results_folder / 'evaluation.pt'))
+        torch.save(output, str(self.evaluation_folder / 'evaluation.pt'))
 
-    def load(self, milestone):
+    def load(self, milestone, sampling_stpes):
         accelerator = self.accelerator
         device = accelerator.device
 
@@ -144,6 +148,9 @@ class Trainer1D(object):
 
         model = self.accelerator.unwrap_model(self.model)
         model.load_state_dict(data['model'])
+        
+        if sampling_stpes != model.sampling_timesteps:
+            model.sampling_timesteps = sampling_stpes
 
         self.step = data['step']
         self.opt.load_state_dict(data['opt'])
@@ -176,14 +183,14 @@ class Trainer1D(object):
 
             for cond, target, ref in tqdm(selected_batches, desc="Evaluating", leave=False):
                 cond, target, ref = cond.to(device), target.to(device), ref.to(device)
-            
+
                 sample = self.ema.ema_model.sample(batch_size=cond.shape[0], condition=cond, reference=ref)
                 self.save_evaluation(sample, target)
                 loss = criterion(sample, target)
                 eva_loss += loss.item()
 
         eva_loss /= num_batches
-    
+
         accelerator.print(f'evaluation loss: {eva_loss:.4f}')
 
     def train(self):
@@ -200,7 +207,6 @@ class Trainer1D(object):
 
                 for _ in range(self.gradient_accumulate_every):
                     cond, target, ref = next(self.dl)
-                    
                     if cond.shape[0] != self.batch_size:
                         cond, target, ref = next(self.dl)
                     cond, target, ref = cond.to(device), target.to(device), ref.to(device)
@@ -236,7 +242,8 @@ class Trainer1D(object):
                             milestone = self.step // self.save_and_sample_every + 1
                             batches = num_to_groups(self.num_samples, self.batch_size)
                             all_samples_list = list(
-                                map(lambda n: self.ema.ema_model.sample(batch_size=n, condition=cond, reference=ref), batches))
+                                map(lambda n: self.ema.ema_model.sample(batch_size=n, condition=cond, reference=ref),
+                                    batches))
 
                         all_samples = torch.cat(all_samples_list, dim=0)
 

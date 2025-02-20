@@ -133,7 +133,7 @@ if __name__ == '__main__':
     
     trainer.train()
 
-    # trainer.load(args.resume)
+    # trainer.load(args.resume, args.sampling_timesteps)
     trainer.evaluate(dataset=train_set, criterion = criterion_dict[args.criterion], num_batches=10)
 
     val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, 
