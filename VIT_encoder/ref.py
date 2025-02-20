@@ -5,7 +5,6 @@ import torch
 import yaml
 
 import models.encoder as encoder
-from einops import rearrange
 
 from datautils import Dataset_ECG_VIT
 from torch.utils.data import DataLoader
@@ -113,7 +112,7 @@ if __name__ == '__main__':
                         type=str,
                         metavar='FILE',
                         help='YAML config file path')
-    parser.add_argument('--val_data_path',
+    parser.add_argument('--data_path',
                         default="C:\\Dataset\\PTB_XL",
                         type=str,
                         metavar='PATH',

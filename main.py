@@ -1,7 +1,11 @@
 import argparse
 import os
+import matplotlib.pyplot as plt
 
-from trainer import *
+import torch
+import torch.nn as nn
+
+from trainer import Trainer1D
 
 from unet import Unet1D
 from diffusion_model import GaussianDiffusion1D
@@ -9,7 +13,7 @@ from datautils import Dataset_ECG_VIT
 
 from VIT_encoder.ref import load_Config, Reference
 
-def plot_one_sample():
+def plot_one_sample(args):
     output = torch.load(str('./results/output_{}.pt'.format(int(args.train_steps / args.sample_interval))))
     os.makedirs('./results/figures', exist_ok=True)
 
@@ -61,18 +65,20 @@ if __name__ == '__main__':
     parser.add_argument("--normalize", type=bool, default=False)
 
     # Evaluate
-    parser.add_argument("--criterion", type=str, default='nn.MSELoss()')
+    criterion_dict = {
+    'MSELoss': nn.MSELoss(),
+    'L1Loss': nn.L1Loss(),
+    'CrossEntropyLoss': nn.CrossEntropyLoss(),
+    }
+
+    parser.add_argument("--resume", type=int, default=0, help='Resume model from checkpoint')
+    parser.add_argument("--criterion", type=str, default='MSELoss', choices=criterion_dict.keys())
     parser.add_argument('--task', type=str, default='ref', choices=['embedding', 'ref'])
     parser.add_argument('--config_path',
                         default="./VIT_encoder/configs/downstream/st_mem.yaml",
                         type=str,
                         metavar='FILE',
                         help='YAML config file path')
-    parser.add_argument('--val_data_path',
-                        default="C:\\Dataset\\PTB_XL",
-                        type=str,
-                        metavar='PATH',
-                        help='Path of val dataset')
     parser.add_argument('--encoder_path',
                         default="./VIT_encoder/st_mem/encoder.pth",
                         type=str,
@@ -119,5 +125,8 @@ if __name__ == '__main__':
     
     trainer.train()
 
-    plot_one_sample()
+    trainer.load(args.resume)
+    trainer.evaluate(dataset=train_set, criterion = criterion_dict[args.criterion], num_batches=10)
+
+    plot_one_sample(args)
     

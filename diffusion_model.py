@@ -176,7 +176,7 @@ class GaussianDiffusion1D(Module):
         x_start = preds.pred_x_start
 
         if clip_denoised:
-            x_start.clamp_(-10., 10.)
+            x_start.clamp_(-1., 1.)
 
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(x_start=x_start, x_t=x, t=t)
         return model_mean, posterior_variance, posterior_log_variance, x_start
@@ -201,7 +201,8 @@ class GaussianDiffusion1D(Module):
 
         x_start = None
 
-        for t in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
+        # for t in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
+        for t in reversed(range(0, self.num_timesteps)):
             # self_cond = x_start if self.self_condition else None
             self_cond = condition if self.self_condition else None
             img, x_start = self.p_sample(img, t, x_self_cond=self_cond, reference=reference)
