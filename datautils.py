@@ -68,7 +68,7 @@ def slice_sequence(data, seq_len, pred_len, shape):
     return x, y
     
 class Dataset_ECG_VIT(Dataset):
-    def __init__(self, root_path, flag, ref_path=None, seq_length=1024, random_crop=True):
+    def __init__(self, root_path, flag, ref_path=None, seq_length=1024, random_crop=False):
 
         self.root_path = root_path
         self.ref_path = ref_path

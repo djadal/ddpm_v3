@@ -200,6 +200,9 @@ class Trainer1D(object):
 
                 for _ in range(self.gradient_accumulate_every):
                     cond, target, ref = next(self.dl)
+                    
+                    if cond.shape[0] != self.batch_size:
+                        cond, target, ref = next(self.dl)
                     cond, target, ref = cond.to(device), target.to(device), ref.to(device)
 
                     with self.accelerator.autocast():

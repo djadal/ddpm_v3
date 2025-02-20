@@ -278,7 +278,7 @@ class GaussianDiffusion1D(Module):
     @autocast('cuda', enabled=False)
     def q_sample(self, x_start, t, noise=None):
         """
-        Diffusion Process,根据xt所服从的高斯分布的mean和var，求出xt, 前向加噪过程
+        Diffusion Process,根据xt所服从的高斯分布的mean和var, 求出xt, 前向加噪过程
         Params:
             x_start:原始数据
             t:某一步time_step

@@ -63,6 +63,8 @@ if __name__ == '__main__':
     # GaussianDiffusion
     parser.add_argument("--length", type=int, default=1024)
     parser.add_argument("--timesteps", type=int, default=1000)
+    parser.add_argument("--sampling_timesteps", type=int, default=1000, help='Use DDIM Sampling when < timesteps')
+    parser.add_argument("--ddim_eta", type=float, default=0., help='DDIM eta')
     parser.add_argument("--objective", type=str, default="pred_noise", choices=["pred_noise", "pred_x0", "pred_v"])
     parser.add_argument("--beta", type=str, default="cosine", choices=["linear", "cosine"])
     parser.add_argument("--normalize", type=bool, default=False)
@@ -112,7 +114,9 @@ if __name__ == '__main__':
     model = GaussianDiffusion1D(model=unet,
                                 seq_length=args.length,
                                 timesteps=args.timesteps,
+                                sampling_timesteps=args.sampling_timesteps,
                                 beta_schedule=args.beta,
+                                ddim_sampling_eta=args.ddim_eta,
                                 auto_normalize=args.normalize
                                 )
     
