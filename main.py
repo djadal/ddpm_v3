@@ -124,10 +124,11 @@ if __name__ == '__main__':
                                 ref_path='.\database')
     
     trainer = Trainer1D(diffusion_model=model, 
-                        dataset=train_set, 
+                        train_set=train_set, 
                         train_batch_size=args.batch_size,
                         train_num_steps=args.train_steps,
                         train_lr=args.lr,
+                        criterion=criterion_dict[args.criterion],
                         save_and_sample_every=args.sample_interval
                         )
     

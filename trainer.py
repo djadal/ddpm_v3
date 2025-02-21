@@ -2,8 +2,8 @@ from pathlib import Path
 from tqdm import tqdm
 import random
 import os
+import datetime
 from multiprocessing import cpu_count
-
 
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
@@ -39,12 +39,15 @@ class Trainer1D(object):
     def __init__(
             self,
             diffusion_model,
-            dataset: Dataset,
+            criterion,
+            train_set: Dataset,
+            val_set: Dataset,
             *,
             train_batch_size=16,
             gradient_accumulate_every=1,
             train_lr=1e-4,
             train_num_steps=100000,
+            is_training=True,
             ema_update_every=10,
             ema_decay=0.995,
             adam_betas=(0.9, 0.99),
@@ -81,12 +84,18 @@ class Trainer1D(object):
 
         # dataset and dataloader
 
-        dl = DataLoader(dataset, batch_size=train_batch_size, shuffle=True, pin_memory=True, num_workers=cpu_count())
+        dl = DataLoader(train_set, batch_size=train_batch_size, shuffle=True, pin_memory=True, num_workers=cpu_count())
         dl = self.accelerator.prepare(dl)
         self.dl = cycle(dl)
 
+        val_loader = DataLoader(val_set, batch_size=train_batch_size, shuffle=False, pin_memory=True, num_workers=cpu_count())
+        self.val = self.accelerator.prepare(val_loader)
+
         # optimizer
         self.opt = Adam(diffusion_model.parameters(), lr=train_lr, betas=adam_betas)
+
+        # criterion
+        self.criterion = criterion
 
         # for logging results in a folder periodically
         if self.accelerator.is_main_process:
@@ -106,11 +115,14 @@ class Trainer1D(object):
         # prepare model, dataloader, optimizer with accelerator
         self.model, self.opt = self.accelerator.prepare(self.model, self.opt)
 
+        # model_status
+        self.is_training = is_training
+
     @property
     def device(self):
         return self.accelerator.device
 
-    def save(self, milestone, samples, target):
+    def save_model(self, milestone):
         if not self.accelerator.is_local_main_process:
             return
 
@@ -124,13 +136,8 @@ class Trainer1D(object):
 
         torch.save(data, str(self.model_dict_folder / f'model_{milestone}.pt'))
 
-        output = {
-            'samples': samples,
-            'target': target,
-        }
-        torch.save(output, str(self.outputs_folder / f'output_{milestone}.pt'))
 
-    def save_evaluation(self, samples, target):
+    def save_evaluation(self, milestone, samples, target):
         if not self.accelerator.is_local_main_process:
             return
 
@@ -138,9 +145,10 @@ class Trainer1D(object):
             'samples': samples,
             'target': target,
         }
-        torch.save(output, str(self.evaluation_folder / 'evaluation.pt'))
 
-    def load(self, milestone, sampling_stpes):
+        torch.save(output, str(self.evaluation_folder / f'sample_{milestone}.pt'))
+
+    def load(self, milestone, sampling_stpes, status='training'):
         accelerator = self.accelerator
         device = accelerator.device
 
@@ -151,6 +159,9 @@ class Trainer1D(object):
         
         if sampling_stpes != model.sampling_timesteps:
             model.sampling_timesteps = sampling_stpes
+
+        if status == 'test':
+            self.model.is_training = False
 
         self.step = data['step']
         self.opt.load_state_dict(data['opt'])
@@ -163,35 +174,38 @@ class Trainer1D(object):
         if exists(self.accelerator.scaler) and exists(data['scaler']):
             self.accelerator.scaler.load_state_dict(data['scaler'])
 
-    def evaluate(self, dataset, criterion, num_batches=None):
+    def evaluate(self, loader, criterion, num_batches=None, milestone=None):
         accelerator = self.accelerator
         device = accelerator.device
         self.ema.ema_model.eval()
 
-        eva_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
-        eva_loader = accelerator.prepare(eva_loader)
+        loader = list(loader)
 
-        eva_loader_list = list(eva_loader)
+        if num_batches is None or num_batches > len(loader):
+            num_batches = len(loader)
 
-        if num_batches is None or num_batches > len(eva_loader_list):
-            num_batches = len(eva_loader_list)
-
-        selected_batches = random.sample(eva_loader_list, num_batches)
+        val_batches = random.sample(loader, num_batches)
 
         with torch.no_grad():
             eva_loss = 0.
 
-            for cond, target, ref in tqdm(selected_batches, desc="Evaluating", leave=False):
+            pbar = tqdm(val_batches, desc="Evaluating", leave=False)
+            for cond, target, ref in pbar:
                 cond, target, ref = cond.to(device), target.to(device), ref.to(device)
 
                 sample = self.ema.ema_model.sample(batch_size=cond.shape[0], condition=cond, reference=ref)
-                self.save_evaluation(sample, target)
+                
                 loss = criterion(sample, target)
                 eva_loss += loss.item()
+                pbar.set_description(f'Evaluating (loss: {eva_loss / (pbar.n + 1):.4f})')
+                if self.is_training:
+                    self.save_evaluation(milestone, sample, target)
 
-        eva_loss /= num_batches
+            eva_loss /= num_batches
 
-        accelerator.print(f'evaluation loss: {eva_loss:.4f}')
+            if not self.is_training:
+                with open(self.evaluation_folder / 'format.txt', 'a') as f:
+                    f.write(f"Evaluation on {num_batches} batches | test_loss: {eva_loss:.4f} | time: {datetime.datetime.now()}\n")
 
     def train(self):
         accelerator = self.accelerator
@@ -237,17 +251,9 @@ class Trainer1D(object):
                         self.ema.ema_model.eval()
 
                         with torch.no_grad():
-                            cond, target, ref = next(self.dl)
-                            cond, target, ref = cond.to(device), target.to(device), ref.to(device)
                             milestone = self.step // self.save_and_sample_every + 1
-                            batches = num_to_groups(self.num_samples, self.batch_size)
-                            all_samples_list = list(
-                                map(lambda n: self.ema.ema_model.sample(batch_size=n, condition=cond, reference=ref),
-                                    batches))
-
-                        all_samples = torch.cat(all_samples_list, dim=0)
-
-                        self.save(milestone, all_samples, target)
+                            self.evaluate(self.val, self.criterion, num_batches=1, milestone=milestone)
+                            self.save_model(milestone)
 
                 pbar.update(1)
 
