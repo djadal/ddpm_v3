@@ -27,10 +27,10 @@ def Upsample(dim, dim_out = None):
 def Downsample(dim, dim_out = None):
     return nn.Conv1d(dim, default(dim_out, dim), 4, 2, 1)
 
-class RMSNorm(Module): # 类似于LayerNorm, 分别对每个样本的所有特征进行Norm
+class RMSNorm(Module):
     def __init__(self, dim):
         super().__init__()
-        self.g = nn.Parameter(torch.ones(1, dim, 1)) # 可学习的缩放参数
+        self.g = nn.Parameter(torch.ones(1, dim, 1)) 
 
     def forward(self, x):
         return F.normalize(x, dim = 1) * self.g * (x.shape[1] ** 0.5)
@@ -206,7 +206,7 @@ class ReferenceModulatedCrossAttention(nn.Module):
         self.context_dropout = nn.Dropout(dropout)
 
         self.y_to_q = nn.Linear(dim, inner_dim, bias=False)
-        self.cond_to_k = nn.Linear(2 * dim + context_dim, inner_dim, bias=False)
+        self.cond_to_k = nn.Linear(2*dim + context_dim, inner_dim, bias=False)
         self.ref_to_v = nn.Linear(dim + context_dim, inner_dim, bias=False)
 
         self.to_out = nn.Linear(inner_dim, dim)
@@ -224,7 +224,7 @@ class ReferenceModulatedCrossAttention(nn.Module):
     ):
         # B, C, K, L, h, device = x.shape[0], x.shape[1], x.shape[2], x.shape[-1],
         h = self.heads
-        # 在RMA的版块里的值
+
         x = self.norm(x)
         reference = self.norm(reference)
         cond_info = self.context_norm(cond_info)
@@ -232,7 +232,7 @@ class ReferenceModulatedCrossAttention(nn.Module):
         reference = repeat(reference, 'b n c -> (b f) n c', f=1)  # (B*C, K, L)
         q_y = self.y_to_q(x)  # (B*C,K,ND)
 
-        cond = self.cond_to_k(torch.cat((x, cond_info, reference), dim=-1))  # (B*C,K,ND)
+        cond = self.cond_to_k(torch.cat((x,cond_info, reference), dim=-1))  # (B*C,K,ND)
         ref = self.ref_to_v(torch.cat((x, reference), dim=-1))  # (B*C,K,ND)
         q_y, cond, ref = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=h), (q_y, cond, ref))  # (B*C, N, K, D)
         sim = einsum('b h i d, b h j d -> b h i j', cond, ref) * self.scale  # (B*C, N, K, K)
@@ -253,6 +253,99 @@ class ReferenceModulatedCrossAttention(nn.Module):
 
         return out
 
+
+class LinearReferenceModulatedCrossAttention(nn.Module):
+    def __init__(
+            self,
+            *,
+            dim,
+            heads=8,
+            dim_head=64,
+            context_dim=None,
+            dropout=0.,
+            talking_heads=False,
+            prenorm=False
+    ):
+        super().__init__()
+        context_dim = default(context_dim, dim)
+
+        self.norm = nn.LayerNorm(dim) if prenorm else nn.Identity()
+        self.context_norm = nn.LayerNorm(context_dim) if prenorm else nn.Identity()
+
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+        inner_dim = dim_head * heads
+
+        self.dropout = nn.Dropout(dropout)
+        self.context_dropout = nn.Dropout(dropout)
+
+        self.y_to_q = nn.Linear(dim, inner_dim, bias=False)
+        self.cond_to_k = nn.Linear(2 * dim + context_dim, inner_dim, bias=False)
+        self.ref_to_v = nn.Linear(dim + context_dim, inner_dim, bias=False)
+
+        self.to_out = nn.Linear(inner_dim, dim)
+        self.context_to_out = nn.Linear(inner_dim, context_dim)
+
+        self.talking_heads = nn.Conv2d(heads, heads, 1, bias=False) if talking_heads else nn.Identity()
+        self.context_talking_heads = nn.Conv2d(heads, heads, 1, bias=False) if talking_heads else nn.Identity()
+
+    def forward(
+            self,
+            x,
+            cond_info,
+            reference,
+            return_attn=False,
+    ):
+        h = self.heads
+
+        # Normalize inputs
+        x = self.norm(x)
+        reference = self.norm(reference)
+        cond_info = self.context_norm(cond_info)
+
+        # Repeat reference for broadcasting
+        reference = repeat(reference, 'b n c -> (b f) n c', f=1)
+
+        # Project inputs to queries, keys, and values
+        q_y = self.y_to_q(x)  # (B*C, K, ND)
+        cond = self.cond_to_k(torch.cat((x, cond_info, reference), dim=-1))  # (B*C, K, ND)
+        ref = self.ref_to_v(torch.cat((x, reference), dim=-1))  # (B*C, K, ND)
+
+        # Rearrange for multi-head attention
+        q_y, cond, ref = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=h), (q_y, cond, ref))
+
+        # Linear Attention
+        # 1. Compute kernelized queries and keys
+        q_y = torch.nn.functional.elu(q_y) + 1  # Apply ELU activation for positive values
+        cond = torch.nn.functional.elu(cond) + 1
+
+        # 2. Compute attention scores using dot product
+        sim = einsum('b h i d, b h j d -> b h i j', q_y, cond) * self.scale
+
+        # 3. Normalize attention scores
+        attn = sim.softmax(dim=-1)
+        context_attn = sim.softmax(dim=-2)
+
+        # Apply dropouts
+        attn = self.dropout(attn)
+        context_attn = self.context_dropout(context_attn)
+
+        # Apply talking heads (if enabled)
+        attn = self.talking_heads(attn)
+        context_attn = self.context_talking_heads(context_attn)
+
+        # Compute outputs
+        out = einsum('b h i j, b h j d -> b h i d', attn, ref)
+        context_out = einsum('b h j i, b h j d -> b h i d', context_attn, cond)
+
+        # Merge heads and project outputs
+        out, context_out = map(lambda t: rearrange(t, 'b h n d -> b n (h d)'), (out, context_out))
+        out = self.to_out(out)
+
+        if return_attn:
+            return out, context_out, attn, context_attn
+
+        return out
 
 
 

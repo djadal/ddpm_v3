@@ -75,6 +75,7 @@ if __name__ == '__main__':
     'CrossEntropyLoss': nn.CrossEntropyLoss(),
     }
 
+    parser.add_argument("--status", type=str, default="train", choices=["train", "test"])
     parser.add_argument("--resume", type=int, default=0, help='Resume model from checkpoint')
     parser.add_argument("--criterion", type=str, default='MSELoss', choices=criterion_dict.keys())
     parser.add_argument('--task', type=str, default='ref', choices=['embedding', 'ref'])
@@ -134,10 +135,11 @@ if __name__ == '__main__':
                         save_and_sample_every=args.sample_interval
                         )
     
-    trainer.train()
+    if args.status == 'train':
+        trainer.train()
+    elif args.status == 'test':
+        # trainer.load(args.resume, args.sampling_timesteps, status='test')
+        trainer.evaluate(trainer.val, criterion=trainer.criterion, num_batches=30)
 
-    # trainer.load(args.resume, args.sampling_timesteps, status='test')
-    trainer.evaluate(trainer.val, criterion=trainer.criterion, num_batches=30)
-
-    plot_one_sample(args)
+        plot_one_sample(args)
     

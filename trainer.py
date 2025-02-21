@@ -252,7 +252,7 @@ class Trainer1D(object):
 
                         with torch.no_grad():
                             milestone = self.step // self.save_and_sample_every + 1
-                            self.evaluate(self.val, self.criterion, num_batches=1, milestone=milestone)
+                            self.evaluate(self.val, self.criterion, num_batches=10, milestone=milestone)
                             self.save_model(milestone)
 
                 pbar.update(1)
