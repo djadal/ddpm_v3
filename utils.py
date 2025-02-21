@@ -25,13 +25,6 @@ def path(root_dir, sub_dir):
 def has_int_squareroot(num):
     return (math.sqrt(num) ** 2) == num
 
-def num_to_groups(num, divisor):
-    groups = num // divisor
-    remainder = num % divisor
-    arr = [divisor] * groups
-    if remainder > 0:
-        arr.append(remainder)
-    return arr
 
 def convert_image_to_fn(img_type, image):
     if image.mode != img_type:

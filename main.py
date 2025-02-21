@@ -9,10 +9,9 @@ from trainer import Trainer1D
 
 from unet import Unet1D
 from diffusion_model import GaussianDiffusion1D
-from datautils import Dataset_ECG_VIT
+from VIT_encoder.datautils import Dataset_ECG_VIT
 from utils import default
 
-from VIT_encoder.ref import load_Config, Reference
 
 def plot_one_sample(args):
     # output = torch.load(str('./results/output_{}.pt'.format(args.resume)))
@@ -121,8 +120,8 @@ if __name__ == '__main__':
     if args.status == 'train':
         trainer.train()
     elif args.status == 'test':
-        # trainer.load(args.resume, args.sampling_timesteps, status='test')
-        trainer.evaluate(trainer.val, criterion=trainer.criterion, num_batches=30)
+        trainer.load(args.resume, args.sampling_timesteps, status='test')
+        trainer.evaluate(trainer.val, criterion=trainer.criterion, num_batches=None)
 
         plot_one_sample(args)
     

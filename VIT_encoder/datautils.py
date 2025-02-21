@@ -68,7 +68,7 @@ def slice_sequence(data, seq_len, pred_len, shape):
     return x, y
     
 class Dataset_ECG_VIT(Dataset):
-    def __init__(self, root_path, flag, ref_path=None, seq_length=1024, random_crop=True):
+    def __init__(self, root_path, flag, ref_path=None, seq_length=1024, random_crop=False):
 
         self.root_path = root_path
         self.ref_path = ref_path
@@ -78,6 +78,7 @@ class Dataset_ECG_VIT(Dataset):
         else:
             self.crop = HeadCrop(seq_length)
         
+        self.flag = flag
         if flag == 'train':
             self.data_path = 'train_data.npz'
         elif flag == 'val':
@@ -91,7 +92,7 @@ class Dataset_ECG_VIT(Dataset):
         self.predict = self.all[:, [2, 3, 4, 5, 7, 8, 9, 10, 11], :] # (remove I, II, V1)
         
         if self.ref_path is not None:
-            self.reference = torch.load(os.path.join(self.ref_path, 'ref.pt'))
+            self.reference = torch.load(os.path.join(self.ref_path, f'{self.flag}_ref.pt'))
         else:
             self.reference = None    
             
@@ -102,13 +103,15 @@ class Dataset_ECG_VIT(Dataset):
         if self.reference == None:
             return self.seq[idx], self.predict[idx]
         else:
-            ref_vec = []
-            for i in self.reference[idx]:
-                ref_vec.append(self.predict[i])
-            ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
-            ref_vec = ref_vec[0]
-            
-            # return torch.cat([self.seq[idx], ref_vec], dim=1), self.all[idx][[0, 1, 6, 2, 3, 4, 5, 7, 8, 9, 10, 11], :]
+            if self.flag == 'train':
+                ref_vec = []
+                for i in self.reference[idx]:
+                    ref_vec.append(self.predict[i])
+                ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
+                ref_vec = ref_vec[0]
+            else:
+                ref_vec = self.reference[idx]
+
             # ref_vec = torch.mean(ref_vec, dim=0) # 对3条ref取平均
             
-            return self.seq[idx], self.predict[idx], ref_vec # (16, 9, 1024)
+            return self.seq[idx], self.predict[idx], ref_vec 

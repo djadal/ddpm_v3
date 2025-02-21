@@ -14,7 +14,7 @@ from einops.layers.torch import Rearrange
 from accelerate import Accelerator
 from ema_pytorch import EMA
 
-from utils import num_to_groups, has_int_squareroot, cycle, path
+from utils import has_int_squareroot, cycle, path
 
 import matplotlib.pyplot as plt
 
@@ -185,12 +185,13 @@ class Trainer1D(object):
             num_batches = len(loader)
 
         val_batches = random.sample(loader, num_batches)
+        checkpoint = random.randint(0, num_batches - 1)
 
         with torch.no_grad():
             eva_loss = 0.
 
-            pbar = tqdm(val_batches, desc="Evaluating", leave=False)
-            for cond, target, ref in pbar:
+            pbar = tqdm(val_batches, desc="Evaluating", leave=True)
+            for i, (cond, target, ref) in enumerate(pbar):
                 cond, target, ref = cond.to(device), target.to(device), ref.to(device)
 
                 sample = self.ema.ema_model.sample(batch_size=cond.shape[0], condition=cond, reference=ref)
@@ -198,7 +199,8 @@ class Trainer1D(object):
                 loss = criterion(sample, target)
                 eva_loss += loss.item()
                 pbar.set_description(f'Evaluating (loss: {eva_loss / (pbar.n + 1):.4f})')
-                if self.is_training:
+                
+                if self.is_training and i == checkpoint:
                     self.save_evaluation(milestone, sample, target)
 
             eva_loss /= num_batches
