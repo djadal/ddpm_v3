@@ -42,8 +42,11 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description="DDPM1d")
     
-    # Trainer
+    # Dataset
     parser.add_argument("--data_path", type=str, default="C:\\Dataset\\PTB_XL")
+    parser.add_argument("--ref_path", type=str, default=".\VIT_encoder\database")
+    
+    # Trainer
     parser.add_argument("--train_steps", type=int, default=20000)
     parser.add_argument("--sample_interval", type=int, default=5000)
     parser.add_argument("--batch_size", type=int, default=16)
@@ -78,28 +81,8 @@ if __name__ == '__main__':
     parser.add_argument("--status", type=str, default="train", choices=["train", "test"])
     parser.add_argument("--resume", type=int, default=0, help='Resume model from checkpoint')
     parser.add_argument("--criterion", type=str, default='MSELoss', choices=criterion_dict.keys())
-    parser.add_argument('--task', type=str, default='ref', choices=['embedding', 'ref'])
-    parser.add_argument('--config_path',
-                        default="./VIT_encoder/configs/downstream/st_mem.yaml",
-                        type=str,
-                        metavar='FILE',
-                        help='YAML config file path')
-    parser.add_argument('--encoder_path',
-                        default="./VIT_encoder/st_mem/encoder.pth",
-                        type=str,
-                        metavar='PATH',
-                        help='Pretrained encoder checkpoint')
-    parser.add_argument('--embedding_path',
-                        default="./VIT_encoder/st_mem/embedding.pt",
-                        type=str,
-                        metavar='PATH',
-                        help='Path to save embeddings')
-    parser.add_argument('--ref_path',
-                        default="./VIT_encoder/database/evaluate",
-                        type=str,
-                        metavar='PATH',
-                        help='Path to save references')
-    
+
+ 
     args = parser.parse_args()
     
     unet = Unet1D(dim=args.dim, 
@@ -121,9 +104,9 @@ if __name__ == '__main__':
                                 )
     
     train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, 
-                                ref_path='.\database')
+                                ref_path=args.ref_path)
     val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, 
-                              ref_path='.\database\evaluation')
+                              ref_path=args.ref_path)
     
     trainer = Trainer1D(diffusion_model=model, 
                         train_set=train_set,

@@ -8,6 +8,7 @@ mode: finetune
 device: cuda:0
 batch_size: 1
 task: ref
+flag: train
 
 data_path: null
 embedding_path: null
