@@ -68,7 +68,7 @@ def slice_sequence(data, seq_len, pred_len, shape):
     return x, y
     
 class Dataset_ECG_VIT(Dataset):
-    def __init__(self, root_path, flag, ref_path=None, seq_length=1024, random_crop=False):
+    def __init__(self, root_path, flag, dataset= None, ref_path=None, seq_length=1024, random_crop=False):
 
         self.root_path = root_path
         self.ref_path = ref_path
@@ -92,7 +92,7 @@ class Dataset_ECG_VIT(Dataset):
         self.predict = self.all[:, [2, 3, 4, 5, 7, 8, 9, 10, 11], :] # (remove I, II, V1)
         
         if self.ref_path is not None:
-            self.reference = torch.load(os.path.join(self.ref_path, f'{self.flag}_ref.pt'))
+            self.reference = torch.load(os.path.join(self.ref_path, f'{dataset}_{self.flag}_ref.pt'))
         else:
             self.reference = None    
             
@@ -104,11 +104,12 @@ class Dataset_ECG_VIT(Dataset):
             return self.seq[idx], self.predict[idx]
         else:
             if self.flag == 'train':
-                ref_vec = []
-                for i in self.reference[idx]:
-                    ref_vec.append(self.predict[i])
-                ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
-                ref_vec = ref_vec[0]
+                # ref_vec = []
+                # for i in self.reference[idx]:
+                #     ref_vec.append(self.predict[i])
+                # ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
+                # ref_vec = ref_vec[0]
+                ref_vec = self.all[self.reference[idx]]
             else:
                 ref_vec = self.reference[idx]
 
