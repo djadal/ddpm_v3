@@ -104,12 +104,11 @@ class Dataset_ECG_VIT(Dataset):
             return self.seq[idx], self.predict[idx]
         else:
             if self.flag == 'train':
-                # ref_vec = []
-                # for i in self.reference[idx]:
-                #     ref_vec.append(self.predict[i])
-                # ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
-                # ref_vec = ref_vec[0]
-                ref_vec = self.all[self.reference[idx]]
+                ref_vec = []
+                for i in self.reference[idx]:
+                    ref_vec.append(self.predict[i])
+                ref_vec = torch.cat([ref.unsqueeze(0) for ref in ref_vec], dim=0) # -> (ref_num, 9, seq_length)
+                ref_vec = ref_vec[0]
             else:
                 ref_vec = self.reference[idx]
 

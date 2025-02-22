@@ -1,4 +1,6 @@
 import math
+import os
+from pathlib import Path
 
 def exists(x):
     return x is not None
@@ -15,6 +17,10 @@ def cycle(dl):
     while True:
         for data in dl:
             yield data
+            
+def path(root_dir, sub_dir):
+    os.makedirs(Path(root_dir) / sub_dir, exist_ok=True)
+    return Path(root_dir) / sub_dir
 
 def has_int_squareroot(num):
     return (math.sqrt(num) ** 2) == num
