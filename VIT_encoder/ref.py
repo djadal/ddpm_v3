@@ -55,7 +55,7 @@ def create_ref(model, data_loader, database, ref_num, device, config):
         
         references = torch.cat([t.unsqueeze(0) for t in references], dim=0)
         os.makedirs(config['ref_path'], exist_ok=True)
-        torch.save(references, os.path.join(config['ref_path'], f'{config["flag"]}_ref.pt'))
+        torch.save(references, os.path.join(config['ref_path'], f'{config["dataset"]}_{config["flag"]}_ref.pt'))
 
 
 def process_ref(config, model, database, ref_num):
@@ -69,7 +69,8 @@ def process_ref(config, model, database, ref_num):
 
 def main(config):
     device = torch.device(config['device'])
-
+    config['data_path'] = os.path.join(config['root_path'], config['dataset'])
+    
     train_set = Dataset_ECG_VIT(root_path=config['data_path'], flag='train', seq_length=2500)
     
     model_name = config['model_name']
@@ -101,13 +102,14 @@ if __name__ == '__main__':
     
     parser.add_argument('--task', type=str, default='ref', choices=['embedding', 'ref'])
     parser.add_argument('--flag', type=str, default='train', choices=['train', 'val', 'test'])
+    parser.add_argument('--dataset', type=str, default='PTB_XL', choices=['PTB_XL', 'CPSC'])
     parser.add_argument('--config_path',
                         default="./configs/downstream/st_mem.yaml",
                         type=str,
                         metavar='FILE',
                         help='YAML config file path')
-    parser.add_argument('--data_path',
-                        default="C:\\Dataset\\PTB_XL",
+    parser.add_argument('--root_path',
+                        default="C:\\Dataset",
                         type=str,
                         metavar='PATH',
                         help='Path of val dataset')

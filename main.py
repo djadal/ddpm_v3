@@ -42,6 +42,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="DDPM1d")
     
     # Dataset
+    parser.add_argument("--data_set", type=str, default='PTB_XL', choices=["PTB_XL", "CPSC"])
     parser.add_argument("--data_path", type=str, default="C:\\Dataset\\PTB_XL")
     parser.add_argument("--ref_path", type=str, default=".\VIT_encoder\database")
     
@@ -102,9 +103,9 @@ if __name__ == '__main__':
                                 auto_normalize=args.normalize
                                 )
     
-    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, 
+    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, dataset=args.data_set,
                                 ref_path=args.ref_path)
-    val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, 
+    val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, dataset=args.data_set,
                               ref_path=args.ref_path)
     
     trainer = Trainer1D(diffusion_model=model, 
@@ -120,7 +121,7 @@ if __name__ == '__main__':
     if args.status == 'train':
         trainer.train()
     elif args.status == 'test':
-        trainer.load(args.resume, args.sampling_timesteps, status='test')
+        trainer.load(args.resume, args.sampling_timesteps, status=args.status)
         trainer.evaluate(trainer.val, criterion=trainer.criterion, num_batches=None)
 
         plot_one_sample(args)

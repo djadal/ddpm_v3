@@ -88,7 +88,7 @@ class Trainer1D(object):
         dl = self.accelerator.prepare(dl)
         self.dl = cycle(dl)
 
-        val_loader = DataLoader(val_set, batch_size=train_batch_size, shuffle=False, pin_memory=True, num_workers=cpu_count())
+        val_loader = DataLoader(val_set, batch_size=train_batch_size, shuffle=False, pin_memory=True, num_workers=cpu_count(), drop_last=True)
         self.val = self.accelerator.prepare(val_loader)
 
         # optimizer
