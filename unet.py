@@ -40,6 +40,7 @@ class Unet1D(Module):
 
         init_dim = default(init_dim, dim)
         self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3)
+        self.cond_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:], [1024, 512, 256, 128]))  # [(init_dim, init_dim), (init_dim, init_dim*2), ...]
@@ -62,6 +63,12 @@ class Unet1D(Module):
             nn.Linear(fourier_dim, time_dim),
             nn.GELU(),
             nn.Linear(time_dim, time_dim)
+        )
+
+        self.ref_mlp = nn.Sequential(
+            nn.Linear(1024 * 3, 1024),
+            nn.GELU(),
+            nn.Linear(1024, 1024)
         )
 
         resnet_block = partial(ResnetBlock, time_emb_dim=time_dim, dropout=dropout) 
@@ -93,20 +100,6 @@ class Unet1D(Module):
         self.embed_layer = nn.Embedding(
             num_embeddings=12, embedding_dim=64
         )  
-
-        self.refconv = nn.Conv1d(
-            in_channels=9,  #
-            out_channels=128,  
-            kernel_size=1,  
-            stride=1,  
-            padding=0  
-        )
-
-       
-        self.reflinear = nn.Linear(
-            in_features=1024,  
-            out_features=128  
-        )
 
         for ind, (dim_in, dim_out, seq) in enumerate(reversed(in_out)):
             is_last = ind == (len(in_out) - 1)
@@ -178,14 +171,14 @@ class Unet1D(Module):
         x = self.init_conv(x)  # x ->(b, init_dim, l)
         r = x.clone()  # r -> (b, init_dim, l)
 
-
+        reference = self.ref_mlp(reference)
         reference = self.init_conv(reference)
         t = self.time_mlp(time)  # t ->(b, 4*init_dim)
 
         side_info = self.get_side_info(x.device)
-        side_info = self.init_conv(side_info)
-        h = []
+        side_info = self.cond_conv(side_info)
 
+        h = []
         ref = []
         side = []
 

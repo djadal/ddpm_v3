@@ -49,9 +49,9 @@ def create_ref(model, data_loader, database, ref_num, device, config):
             _, idx = torch.topk(-1 * distances, num + 1)
             
             if config['flag'] == 'train':
-                references.append(idx[1])
+                references.append(idx[1:])
             else:
-                references.append(database.all[idx[0], :, :1024])
+                references.append(torch.cat([database.all[i, :, :1024] for i in idx[:ref_num]], dim=2))
         
         references = torch.cat([t.unsqueeze(0) for t in references], dim=0)
         os.makedirs(config['ref_path'], exist_ok=True)
