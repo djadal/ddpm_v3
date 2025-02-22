@@ -107,10 +107,13 @@ if __name__ == '__main__':
                                 ref_path=args.ref_path)
     val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, dataset=args.data_set,
                               ref_path=args.ref_path)
+    test_set = Dataset_ECG_VIT(root_path=args.data_path, flag='test', seq_length=args.length, dataset=args.data_set,
+                              ref_path=args.ref_path)
     
     trainer = Trainer1D(diffusion_model=model, 
                         train_set=train_set,
-                        val_set=val_set, 
+                        val_set=val_set,
+                        test_set=test_set, 
                         train_batch_size=args.batch_size,
                         train_num_steps=args.train_steps,
                         train_lr=args.lr,
@@ -123,6 +126,7 @@ if __name__ == '__main__':
     elif args.status == 'test':
         trainer.load(args.resume, args.sampling_timesteps, status=args.status)
         trainer.evaluate(trainer.val, criterion=trainer.criterion, num_batches=None)
+        trainer.evaluate(trainer.test, criterion=trainer.criterion, num_batches=None)
 
-        plot_one_sample(args)
+        # plot_one_sample(args)
     

@@ -42,6 +42,7 @@ class Trainer1D(object):
             criterion,
             train_set: Dataset,
             val_set: Dataset,
+            test_set: Dataset,
             *,
             train_batch_size=16,
             gradient_accumulate_every=1,
@@ -90,6 +91,9 @@ class Trainer1D(object):
 
         val_loader = DataLoader(val_set, batch_size=train_batch_size, shuffle=False, pin_memory=True, num_workers=cpu_count(), drop_last=True)
         self.val = self.accelerator.prepare(val_loader)
+        
+        test_loader = DataLoader(test_set, batch_size=train_batch_size, shuffle=False, pin_memory=True, num_workers=cpu_count(), drop_last=True)
+        self.test = self.accelerator.prepare(test_loader)
 
         # optimizer
         self.opt = Adam(diffusion_model.parameters(), lr=train_lr, betas=adam_betas)
@@ -106,7 +110,7 @@ class Trainer1D(object):
         self.results_folder.mkdir(exist_ok=True)
 
         self.model_dict_folder = path(self.results_folder, 'model_dicts')
-        self.outputs_folder = path(self.results_folder, 'outputs')
+        # self.outputs_folder = path(self.results_folder, 'outputs')
         self.evaluation_folder = path(self.results_folder, 'evaluation')
 
         # step counter state
@@ -152,7 +156,7 @@ class Trainer1D(object):
         accelerator = self.accelerator
         device = accelerator.device
 
-        data = torch.load(str(self.results_folder / f'model_{milestone}.pt'), map_location=device, weights_only=True)
+        data = torch.load(str(self.model_dict_folder / f'model_{milestone}.pt'), map_location=device, weights_only=True)
 
         model = self.accelerator.unwrap_model(self.model)
         model.load_state_dict(data['model'])
@@ -161,15 +165,12 @@ class Trainer1D(object):
             model.sampling_timesteps = sampling_stpes
 
         if status == 'test':
-            self.model.is_training = False
+            self.is_training = False
 
         self.step = data['step']
         self.opt.load_state_dict(data['opt'])
         if self.accelerator.is_main_process:
             self.ema.load_state_dict(data["ema"])
-
-        if 'version' in data:
-            print(f"loading from version {data['version']}")
 
         if exists(self.accelerator.scaler) and exists(data['scaler']):
             self.accelerator.scaler.load_state_dict(data['scaler'])
@@ -207,7 +208,7 @@ class Trainer1D(object):
 
             if not self.is_training:
                 with open(self.evaluation_folder / 'format.txt', 'a') as f:
-                    f.write(f"Evaluation on {num_batches} batches | test_loss: {eva_loss:.4f} | time: {datetime.datetime.now()}\n")
+                    f.write(f"Trained for {self.step} steps | Evaluation on {num_batches} batches | test_loss: {eva_loss:.4f} | time: {datetime.datetime.now()}\n")
 
     def train(self):
         accelerator = self.accelerator
