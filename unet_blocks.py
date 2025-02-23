@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 from torch.nn import Module, ModuleList
 from torch import einsum
+from einops.layers.torch import Rearrange
 import torch.nn.functional as F
 
 from utils import default, exists
@@ -18,14 +19,76 @@ class Residual(Module):
     def forward(self, x, *args, **kwargs):
         return self.fn(x, *args, **kwargs) + x
 
-def Upsample(dim, dim_out=None):
-    return nn.Sequential(
-        nn.Upsample(scale_factor = 2, mode = 'nearest'),
-        nn.Conv1d(dim, default(dim_out, dim), 3, padding=1)
-    )
+class FFTBlock(Module):
+    def __init__(self, dim_in=16, dim_out=None, patch_size=64,):
+        super().__init__()
+        self.to_patch = nn.Sequential(Rearrange('b c (n p) -> b c n p', p=patch_size),
+                                      nn.LayerNorm(patch_size),
+                                      Rearrange('b c n p -> (b n) c p')) 
+        self.unpatch = Rearrange('(b n) c p -> b c (n p)', p=patch_size)
+        self.fft = torch.fft.fft()      
+
+        # frequency_domain
+        self.real_conv1 = nn.Conv1d(dim_in, 4*dim_in, 1) 
+        self.img_conv1 = nn.Conv1d(dim_in, 4*dim_in, 1)
+        self.real_conv2 = nn.Conv1d(4*dim_in, dim_out, 1) 
+        self.img_conv2 = nn.Conv1d(4*dim_in, dim_out, 1)
+
+        self.real_pool = nn.AdaptiveAvgPool1d(1)
+        self.img_pool = nn.AdaptiveAvgPool1d(1)
+
+        self.fre_conv = nn.Conv1d(dim_out, dim_out, 1)
+
+        # time_domain
+        self.time_conv = nn.Sequential(nn.Conv1d(dim_in, 4*dim_in, 1),
+                                       nn.GELU(),
+                                       nn.Conv1d(4*dim_in, dim_out, 1))
+
+        self.final_conv = nn.Conv1d(dim_out, dim_out, 1)
+
+        self.act = nn.GELU()
     
-# def Upsample(dim, dim_out = None):
-#     return nn.ConvTranspose1d(dim, default(dim_out, dim), 4, stride=2, padding=1)
+    def forward(x, self):
+        residual = x
+        x_f, x_t = torch.chunk(x, 2, dim=-1)
+
+        # frequency domain
+        # wfca block
+        res_f = x_f
+        x_f = self.to_patch(x_f)
+        x_f = self.fft(x_f)
+        real, img = x_f.real, x_f.imag
+
+        real_1 = self.act(self.real_conv1(real) - self.img_conv1(img))
+        img_1 = self.act(self.real_conv1(img) + self.img_conv1(real))
+        
+        real_2 = self.real_conv2(real_1) - self.img_conv2(img_1)
+        img_2 = self.real_conv2(img_1) + self.img_conv2(real_1)
+
+        real_attn, img_attn = self.real_pool(real_2), self.img_pool(img_2)
+
+        x_f = torch.complex(real_2 * (1 + real_attn), img_2 * (1 + img_attn))
+        x_f = torch.fft.ifft(x_f).real
+        x_f = self.unpatch(x_f) + res_f
+
+        # layernorm block
+        x_f = self.fre_conv(nn.Layernorm(x_f)) + x_f
+
+        # time domain
+        x_t = self.time_conv(x_t) + x_t
+
+        x = torch.cat((x_f, x_t), dim=-1)
+        return self.final_conv(x) + residual
+
+
+# def Upsample(dim, dim_out=None):
+#     return nn.Sequential(
+#         nn.Upsample(scale_factor = 2, mode = 'nearest'),
+#         nn.Conv1d(dim, default(dim_out, dim), 3, padding=1)
+#     )
+    
+def Upsample(dim, dim_out = None):
+    return nn.ConvTranspose1d(dim, default(dim_out, dim), 4, stride=2, padding=1)
 
 def Downsample(dim, dim_out=None):
     return nn.Conv1d(dim, default(dim_out, dim), 4, stride=2, padding=1)
