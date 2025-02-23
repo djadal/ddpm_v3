@@ -138,7 +138,7 @@ class Trainer1D(object):
             'scaler': self.accelerator.scaler.state_dict() if exists(self.accelerator.scaler) else None,
         }
 
-        torch.save(data, str(self.model_dict_folder / f'model_{milestone}.pt'))
+        torch.save(data, str(self.model_dict_folder / f'model_{self.model.num_timesteps}_{milestone}.pt'))
 
 
     def save_evaluation(self, milestone, samples, target):
@@ -150,13 +150,13 @@ class Trainer1D(object):
             'target': target,
         }
 
-        torch.save(output, str(self.evaluation_folder / f'sample_{milestone}.pt'))
+        torch.save(output, str(self.evaluation_folder / f'sample_{self.model.num_timesteps}_{milestone}.pt'))
 
     def load(self, milestone, sampling_stpes, status='training'):
         accelerator = self.accelerator
         device = accelerator.device
 
-        data = torch.load(str(self.model_dict_folder / f'model_{milestone}.pt'), map_location=device, weights_only=True)
+        data = torch.load(str(self.model_dict_folder / f'model_{self.model.num_timesteps}_{milestone}.pt'), map_location=device, weights_only=True)
 
         model = self.accelerator.unwrap_model(self.model)
         model.load_state_dict(data['model'])
@@ -208,7 +208,13 @@ class Trainer1D(object):
 
             if not self.is_training:
                 with open(self.evaluation_folder / 'format.txt', 'a') as f:
-                    f.write(f"Trained for {self.step} steps | Evaluation on {num_batches} batches | test_loss: {eva_loss:.4f} | time: {datetime.datetime.now()}\n")
+                    f.write(
+                            f"Trained for {self.train_num_steps} steps | "
+                            f"Sample_steps: {self.model.num_timesteps} | "
+                            f"Evaluation on {num_batches} batches | "
+                            f"test_loss: {eva_loss:.4f} | "
+                            f"time: {datetime.datetime.now()}\n"
+                            )
 
     def train(self):
         accelerator = self.accelerator
@@ -260,6 +266,6 @@ class Trainer1D(object):
 
                 pbar.update(1)
 
-        plot_loss_curve(loss_list, save_path=str(self.results_folder / f'loss_curve.png'))
+        plot_loss_curve(loss_list, save_path=str(self.model_dict_folder / f'{self.model.num_timesteps}_loss_curve.png'))
         accelerator.print('training complete')
 

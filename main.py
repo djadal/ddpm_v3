@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 import matplotlib.pyplot as plt
 
 import torch
@@ -15,7 +16,7 @@ from utils import default
 
 def plot_one_sample(args):
     # output = torch.load(str('./results/output_{}.pt'.format(args.resume)))
-    output = torch.load('./results/evaluation/sample_{}.pt'.format(args.resume))
+    output = torch.load('./results/evaluation/sample_{}_{}.pt'.format(args.timesteps, args.resume))
 
     lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
 
@@ -47,7 +48,7 @@ if __name__ == '__main__':
     parser.add_argument("--ref_path", type=str, default="./VIT_encoder/database")
     
     # Trainer
-    parser.add_argument("--train_steps", type=int, default=20000)
+    parser.add_argument("--train_steps", type=int, default=10000)
     parser.add_argument("--sample_interval", type=int, default=10000)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -64,8 +65,8 @@ if __name__ == '__main__':
     
     # GaussianDiffusion
     parser.add_argument("--length", type=int, default=1024)
-    parser.add_argument("--timesteps", type=int, default=200)
-    parser.add_argument("--sampling_timesteps", type=int, default=200, help='Use DDIM Sampling when < timesteps')
+    parser.add_argument("--timesteps", type=int, default=50)
+    parser.add_argument("--sampling_timesteps", type=int, default=50, help='Use DDIM Sampling when < timesteps')
     parser.add_argument("--ddim_eta", type=float, default=0., help='DDIM eta')
     parser.add_argument("--objective", type=str, default="pred_noise", choices=["pred_noise", "pred_x0", "pred_v"])
     parser.add_argument("--beta", type=str, default="cosine", choices=["linear", "cosine"])
@@ -103,11 +104,11 @@ if __name__ == '__main__':
                                 auto_normalize=args.normalize
                                 )
     
-    train_set = Dataset_ECG_VIT(root_path=os.path.join(args.data_path, args.dataset), flag='train', 
+    train_set = Dataset_ECG_VIT(root_path=str(Path(args.data_path) / args.dataset), flag='train', 
                                 seq_length=args.length, dataset=args.dataset, ref_path=args.ref_path)
-    val_set = Dataset_ECG_VIT(root_path=os.path.join(args.data_path, args.dataset), flag='val', 
+    val_set = Dataset_ECG_VIT(root_path=str(Path(args.data_path) / args.dataset), flag='val', 
                               seq_length=args.length, dataset=args.dataset, ref_path=args.ref_path)
-    test_set = Dataset_ECG_VIT(root_path=os.path.join(args.data_path, args.dataset), flag='test', 
+    test_set = Dataset_ECG_VIT(root_path=str(Path(args.data_path) / args.dataset), flag='test', 
                                seq_length=args.length, dataset=args.dataset, ref_path=args.ref_path)
     
     trainer = Trainer1D(diffusion_model=model, 
