@@ -193,7 +193,7 @@ class Trainer1D(object):
         if exists(self.accelerator.scaler) and exists(data['scaler']):
             self.accelerator.scaler.load_state_dict(data['scaler'])
 
-    def evaluate(self, dataloader, criterion, args):
+    def evaluate(self, dataloader, criterion):
         accelerator = self.accelerator
         device = accelerator.device
         self.ema.ema_model.eval()

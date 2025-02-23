@@ -20,12 +20,12 @@ class Residual(Module):
         return self.fn(x, *args, **kwargs) + x
 
 class FFTBlock(Module):
-    def __init__(self, dim_in=16, dim_out=None, patch_size=64,):
+    def __init__(self, dim_in=16, dim_out=None, patch_size=64, seq=1024):
         super().__init__()
         self.to_patch = nn.Sequential(Rearrange('b c (n p) -> b c n p', p=patch_size),
                                       nn.LayerNorm(patch_size),
                                       Rearrange('b c n p -> (b n) c p')) 
-        self.unpatch = Rearrange('(b n) c p -> b c (n p)', p=patch_size)
+        self.unpatch = Rearrange('(b n) c p -> b c (n p)', b=16)
         self.fft = torch.fft.fft    
 
         # frequency_domain
@@ -37,6 +37,7 @@ class FFTBlock(Module):
         self.real_pool = nn.AdaptiveAvgPool1d(1)
         self.img_pool = nn.AdaptiveAvgPool1d(1)
 
+        self.norm = nn.LayerNorm(int(seq/2))
         self.fre_conv = nn.Conv1d(dim_out, dim_out, 1)
 
         # time_domain
@@ -72,10 +73,12 @@ class FFTBlock(Module):
         x_f = self.unpatch(x_f) + res_f
 
         # layernorm block
-        x_f = self.fre_conv(nn.Layernorm(x_f.shape[2])(x_f)) + x_f
+        r = x_f
+        x_f = self.fre_conv(self.norm(x_f)) + r
 
         # time domain
-        x_t = self.time_conv(x_t) + x_t
+        r = x_t
+        x_t = self.time_conv(x_t) + r
 
         x = torch.cat((x_f, x_t), dim=-1)
         return self.final_conv(x) + residual

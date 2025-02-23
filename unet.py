@@ -95,7 +95,7 @@ class Unet1D(Module):
             self.downs.append(ModuleList([
                 resnet_block(dim_in, dim_in),
                 resnet_block(dim_in, dim_in),
-                FFTBlock(dim_in, dim_in, patch_size=seq/4),
+                FFTBlock(dim_in, dim_in, patch_size=int(seq/4), seq=int(seq)),
                 Residual(PreNorm(dim_in, ReferenceModulatedCrossAttention(dim=seq))),
                 Downsample(dim_in, dim_out) if not is_last else nn.Conv1d(dim_in, dim_out, 3, padding=1)
                 # downsample -> (b, 2*c, l/2)
@@ -118,7 +118,7 @@ class Unet1D(Module):
             self.ups.append(ModuleList([
                 resnet_block(dim_out + dim_in, dim_out),
                 resnet_block(dim_out + dim_in, dim_out),
-                FFTBlock(dim_out, dim_out, patch_size=seq/4),
+                FFTBlock(dim_out, dim_out, patch_size=int(seq/4), seq=int(seq)),
                 Residual(PreNorm(dim_out, ReferenceModulatedCrossAttention(dim=seq))),
                 Upsample(dim_out, dim_in) if not is_last else nn.Conv1d(dim_out, dim_in, 3, padding=1)
             ]))
@@ -194,7 +194,7 @@ class Unet1D(Module):
         ref = []
         side = []
 
-        for block1, block2, attn, fft, downsample in self.downs:
+        for block1, block2, fft, attn, downsample in self.downs:
             x = block1(x, t)
             reference = block1(reference, t)
             side_info = block1(side_info)
@@ -223,7 +223,7 @@ class Unet1D(Module):
         x = self.mid_attn(x)
         x = self.mid_block2(x, t)
 
-        for block1, block2, attn, fft, upsample in self.ups:
+        for block1, block2, fft, attn, upsample in self.ups:
             x = torch.cat((x, h.pop()), dim=1)
             reference = torch.cat((reference, ref.pop()), dim=1)
             side_info = torch.cat((side_info, side.pop()), dim=1)
