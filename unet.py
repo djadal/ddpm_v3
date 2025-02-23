@@ -3,6 +3,7 @@ import numpy as np
 
 from torch import nn
 from torch.nn import Module, ModuleList
+import torch.fft
 
 from utils import default
 
@@ -69,6 +70,15 @@ class Unet1D(Module):
             nn.Linear(1024 * 3, 1024),
             nn.GELU(),
             nn.Linear(1024, 1024)
+        )
+        
+        # fft_block
+        
+        self.fft_block = nn.Sequential(
+            nn.LayerNorm(3),
+            nn.Conv1d(3, init_dim, 5, padding=2),
+            nn.GELU(),
+            nn.Conv1d(init_dim, init_dim, 3, padding=1),
         )
 
         resnet_block = partial(ResnetBlock, time_emb_dim=time_dim, dropout=dropout) 
@@ -168,6 +178,12 @@ class Unet1D(Module):
             # x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
             x = torch.cat((x_self_cond, x), dim=1)  # x -> (b, 2*c, l)
 
+        # fft
+        x_self_cond = torch.fft.fft(x_self_cond, dim=-1)
+        real, img = x_self_cond.real, x_self_cond.imag
+        real, img = self.fft_block(real), self.fft_block(img)
+        fre_info = torch.fft.ifft(torch.complex(real, img), dim=-1).real # (b, init_dim, l)
+        
         x = self.init_conv(x)  # x ->(b, init_dim, l)
         r = x.clone()  # r -> (b, init_dim, l)
 
@@ -181,58 +197,71 @@ class Unet1D(Module):
         h = []
         ref = []
         side = []
+        fre = []
 
         for block1, block2, attn, downsample in self.downs:
             x = block1(x, t)
             reference = block1(reference, t)
             side_info = block1(side_info)
+            fre_info = block1(fre_info)
 
             h.append(x)
             side.append(side_info)
             ref.append(reference)
+            fre.append(fre_info)
 
             x = block2(x, t)
             reference = block2(reference, t)
             side_info = block2(side_info, t)
+            fre_info = block2(fre_info, t)
 
             x = attn(x, reference=reference, cond_info=side_info)
 
             h.append(x)
             ref.append(reference)
             side.append(side_info)
+            fre.append(fre_info)
+            
+            x = x * torch.sigmoid(fre_info)
 
             x = downsample(x)
             reference = downsample(reference)
             side_info = downsample(side_info)
+            fre_info = downsample(fre_info)
 
         x = self.mid_block1(x, t)
-
         x = self.mid_attn(x)
-
         x = self.mid_block2(x, t)
 
         for block1, block2, attn, upsample in self.ups:
             x = torch.cat((x, h.pop()), dim=1)
             reference = torch.cat((reference, ref.pop()), dim=1)
             side_info = torch.cat((side_info, side.pop()), dim=1)
+            fre_info = torch.cat((fre_info, fre.pop()), dim=1)
 
             x = block1(x, t)
             reference = block1(reference, t)
             side_info = block1(side_info, t)
+            fre_info = block1(fre_info, t)
 
             x = torch.cat((x, h.pop()), dim=1)
             reference = torch.cat((reference, ref.pop()), dim=1)
             side_info = torch.cat((side_info, side.pop()), dim=1)
+            fre_info = torch.cat((fre_info, fre.pop()), dim=1)
 
             x = block2(x, t)
             reference = block2(reference, t)
             side_info = block2(side_info, t)
+            fre_info = block2(fre_info, t)
 
             x = attn(x, reference=reference, cond_info=side_info)
 
+            x = x * torch.sigmoid(fre_info)
+            
             x = upsample(x)
             reference = upsample(reference)
             side_info = upsample(side_info)
+            fre_info = upsample(fre_info)   
 
 
         x = torch.cat((x, r), dim=1)

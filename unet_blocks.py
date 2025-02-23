@@ -85,9 +85,9 @@ class RandomOrLearnedSinusoidalPosEmb(Module):
 # building block modules
 
 class Block(Module):
-    def __init__(self, dim, dim_out, dropout = 0. ,kernel_size=3):
+    def __init__(self, dim, dim_out, dropout = 0. ,kernel_size=3, padding=1):
         super().__init__()
-        self.proj = nn.Conv1d(dim, dim_out, kernel_size=kernel_size, padding=1) # same padding
+        self.proj = nn.Conv1d(dim, dim_out, kernel_size=kernel_size, padding=padding) # same padding
         self.norm = RMSNorm(dim_out)
         self.act = nn.SiLU()
         self.dropout = nn.Dropout(dropout)
