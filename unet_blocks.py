@@ -26,7 +26,7 @@ class FFTBlock(Module):
                                       nn.LayerNorm(patch_size),
                                       Rearrange('b c n p -> (b n) c p')) 
         self.unpatch = Rearrange('(b n) c p -> b c (n p)', p=patch_size)
-        self.fft = torch.fft.fft()      
+        self.fft = torch.fft.fft    
 
         # frequency_domain
         self.real_conv1 = nn.Conv1d(dim_in, 4*dim_in, 1) 
@@ -48,7 +48,7 @@ class FFTBlock(Module):
 
         self.act = nn.GELU()
     
-    def forward(x, self):
+    def forward(self, x):
         residual = x
         x_f, x_t = torch.chunk(x, 2, dim=-1)
 
@@ -67,12 +67,12 @@ class FFTBlock(Module):
 
         real_attn, img_attn = self.real_pool(real_2), self.img_pool(img_2)
 
-        x_f = torch.complex(real_2 * (1 + real_attn), img_2 * (1 + img_attn))
+        x_f = torch.complex(real_2 * (1. + real_attn), img_2 * (1. + img_attn))
         x_f = torch.fft.ifft(x_f).real
         x_f = self.unpatch(x_f) + res_f
 
         # layernorm block
-        x_f = self.fre_conv(nn.Layernorm(x_f)) + x_f
+        x_f = self.fre_conv(nn.Layernorm(x_f.shape[2])(x_f)) + x_f
 
         # time domain
         x_t = self.time_conv(x_t) + x_t
