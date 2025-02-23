@@ -59,10 +59,11 @@ class GaussianDiffusion1D(Module):
 
         # sampling related parameters
 
-        self.sampling_timesteps = default(sampling_timesteps,
-                                          timesteps)  # default num sampling timesteps to number of timesteps at training
+        self.sampling_timesteps = default(sampling_timesteps, timesteps)  # default num sampling timesteps to number of timesteps at training
 
-        assert self.sampling_timesteps <= timesteps
+        if self.sampling_timesteps > timesteps:
+            self.sampling_timesteps = timesteps
+            
         self.is_ddim_sampling = self.sampling_timesteps < timesteps
         self.ddim_sampling_eta = ddim_sampling_eta
 

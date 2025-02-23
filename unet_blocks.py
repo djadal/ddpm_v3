@@ -18,14 +18,17 @@ class Residual(Module):
     def forward(self, x, *args, **kwargs):
         return self.fn(x, *args, **kwargs) + x
 
-def Upsample(dim, dim_out = None):
+def Upsample(dim, dim_out=None):
     return nn.Sequential(
         nn.Upsample(scale_factor = 2, mode = 'nearest'),
-        nn.Conv1d(dim, default(dim_out, dim), 3, padding = 1)
+        nn.Conv1d(dim, default(dim_out, dim), 3, padding=1)
     )
+    
+# def Upsample(dim, dim_out = None):
+#     return nn.ConvTranspose1d(dim, default(dim_out, dim), 4, stride=2, padding=1)
 
-def Downsample(dim, dim_out = None):
-    return nn.Conv1d(dim, default(dim_out, dim), 4, 2, 1)
+def Downsample(dim, dim_out=None):
+    return nn.Conv1d(dim, default(dim_out, dim), 4, stride=2, padding=1)
 
 class RMSNorm(Module):
     def __init__(self, dim):
@@ -82,9 +85,9 @@ class RandomOrLearnedSinusoidalPosEmb(Module):
 # building block modules
 
 class Block(Module):
-    def __init__(self, dim, dim_out, dropout = 0.):
+    def __init__(self, dim, dim_out, dropout = 0. ,kernel_size=3):
         super().__init__()
-        self.proj = nn.Conv1d(dim, dim_out, 3, padding = 1) # same padding
+        self.proj = nn.Conv1d(dim, dim_out, kernel_size=kernel_size, padding=1) # same padding
         self.norm = RMSNorm(dim_out)
         self.act = nn.SiLU()
         self.dropout = nn.Dropout(dropout)
@@ -101,14 +104,14 @@ class Block(Module):
         return self.dropout(x)
 
 class ResnetBlock(Module):
-    def __init__(self, dim, dim_out, *, time_emb_dim = None, dropout = 0.):
+    def __init__(self, dim, dim_out, *, time_emb_dim = None, dropout=0.):
         super().__init__()
         self.mlp = nn.Sequential(
             nn.SiLU(),
             nn.Linear(time_emb_dim, dim_out * 2)
         ) if exists(time_emb_dim) else None
 
-        self.block1 = Block(dim, dim_out, dropout = dropout)
+        self.block1 = Block(dim, dim_out, dropout=dropout)
         self.block2 = Block(dim_out, dim_out)
         self.res_conv = nn.Conv1d(dim, dim_out, 1) if dim != dim_out else nn.Identity()
 
