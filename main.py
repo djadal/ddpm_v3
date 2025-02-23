@@ -42,8 +42,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="DDPM1d")
     
     # Dataset
-    parser.add_argument("--data_set", type=str, default='PTB_XL', choices=["PTB_XL", "CPSC"])
-    parser.add_argument("--data_path", type=str, default="/root/autodl-tmp/DDPM/Dataset/PTB_XL")
+    parser.add_argument("--dataset", type=str, default='PTB_XL', choices=["PTB_XL", "CPSC"])
+    parser.add_argument("--data_path", type=str, default="/root/autodl-tmp/DDPM/Dataset/CPSC")
     parser.add_argument("--ref_path", type=str, default="./VIT_encoder/database")
     
     # Trainer
@@ -103,11 +103,11 @@ if __name__ == '__main__':
                                 auto_normalize=args.normalize
                                 )
     
-    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, dataset=args.data_set,
+    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, dataset=args.dataset,
                                 ref_path=args.ref_path)
-    val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, dataset=args.data_set,
+    val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, dataset=args.dataset,
                               ref_path=args.ref_path)
-    test_set = Dataset_ECG_VIT(root_path=args.data_path, flag='test', seq_length=args.length, dataset=args.data_set,
+    test_set = Dataset_ECG_VIT(root_path=args.data_path, flag='test', seq_length=args.length, dataset=args.dataset,
                               ref_path=args.ref_path)
     
     trainer = Trainer1D(diffusion_model=model, 

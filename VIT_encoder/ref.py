@@ -20,7 +20,7 @@ def load_config(args) -> dict:
 
     return config
 
-def embedding(model, data_loader, device, embedding_path):
+def embedding(model, data_loader, device, config):
     embedding_list = []
     
     with torch.no_grad():
@@ -32,11 +32,11 @@ def embedding(model, data_loader, device, embedding_path):
             embedding_list.append(embed.cpu())
         
         embedding_list = torch.cat(embedding_list, dim=0)
-        torch.save(embedding_list.float(), embedding_path)
+        torch.save(embedding_list.float(), os.path.join(config['embedding_path'], f'{config["dataset"]}_embedding.pt'))
 
 def create_ref(model, data_loader, database, ref_num, device, config):
     num = ref_num
-    embedding = torch.load(config['embedding_path'])
+    embedding = torch.load(os.path.join(config['embedding_path'], f'{config["dataset"]}_embedding.pt'))
     references = []
     
     with torch.no_grad():
@@ -51,7 +51,7 @@ def create_ref(model, data_loader, database, ref_num, device, config):
             if config['flag'] == 'train':
                 references.append(idx[1:])
             else:
-                references.append(torch.cat([database.all[i, :, :1024] for i in idx[:ref_num]], dim=1))
+                references.append(torch.cat([database.all[i] for i in idx[:ref_num]], dim=1))
         
         references = torch.cat([t.unsqueeze(0) for t in references], dim=0)
         os.makedirs(config['ref_path'], exist_ok=True)
@@ -93,7 +93,7 @@ def main(config):
     
     if config['task'] == 'embedding':
         train_loader = DataLoader(train_set, batch_size=config['batch_size'], shuffle=True)
-        embedding(model, train_loader, config['device'], config['embedding_path'])
+        embedding(model, train_loader, config['device'], config)
     else:
         process_ref(config, model, train_set, ref_num=3)
 
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--task', type=str, default='ref', choices=['embedding', 'ref'])
     parser.add_argument('--flag', type=str, default='train', choices=['train', 'val', 'test'])
-    parser.add_argument('--dataset', type=str, default='PTB_XL', choices=['PTB_XL', 'CPSC'])
+    parser.add_argument('--dataset', type=str, default='CPSC', choices=['PTB_XL', 'CPSC'])
     parser.add_argument('--config_path',
                         default="./configs/downstream/st_mem.yaml",
                         type=str,
@@ -119,7 +119,7 @@ if __name__ == '__main__':
                         metavar='PATH',
                         help='Pretrained encoder checkpoint')
     parser.add_argument('--embedding_path',
-                        default="./st_mem/embedding.pt",
+                        default="./st_mem",
                         type=str,
                         metavar='PATH',
                         help='Path to save embeddings')
