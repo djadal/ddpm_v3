@@ -14,14 +14,22 @@ from VIT_encoder.datautils import Dataset_ECG_VIT
 from utils import default
 
 
-def plot_one_sample(args):
-    # output = torch.load(str('./results/output_{}.pt'.format(args.resume)))
-    output = torch.load('./results/evaluation/sample_{}_{}.pt'.format(args.timesteps, args.resume))
+def plot_sample(args):
+    output = torch.load('./results/samples/samples_{}_{}.pt'.format(args.timesteps, args.loss))
 
     lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
 
-    for idx, (sample, target) in enumerate(zip(output['samples'].cpu(), output['target'].cpu())):
-        plt.figure(figsize=(40, 16))
+    samples = output['samples'].cpu()
+    target = output['target'].cpu()
+
+    samples = samples.reshape(-1, *samples.shape[2:])
+    target = target.reshape(-1, *target.shape[2:])
+
+    indices = torch.randperm(samples.shape[0])[:min(25, samples.shape[0])]
+
+    for idx in indices:
+        sample, target = samples[idx], target[idx]
+        plt.figure(figsize=(28, 16))
         for i in range(9):
             plt.subplot(3, 3, i + 1)
             plt.plot(sample[i], label=f'Sample_{lead_names[i]}', color='red', linewidth=1)
@@ -29,14 +37,11 @@ def plot_one_sample(args):
             plt.legend(loc="upper right")
             plt.ylabel("Amplitude(mV)")
 
-        plt.xlabel("Time Steps")
-        plt.suptitle("Generated ECG Signals")
+        plt.xlabel("Time")
 
         plt.tight_layout()
 
-        # plt.savefig(f'./results/figures/output_{idx}_{args.train_steps}.png')
-        plt.savefig(f'./results/figures/evaluation/{idx}.png')
-
+        plt.savefig(f'/root/autodl-tmp/DDPM/Remote/figures/sample_{idx}.png')
 
 if __name__ == '__main__':
     
@@ -79,8 +84,9 @@ if __name__ == '__main__':
     'CrossEntropyLoss': nn.CrossEntropyLoss(),
     }
 
-    parser.add_argument("--status", type=str, default="train", choices=["train", "test"])
+    parser.add_argument("--status", type=str, default="train", choices=["train", "test", "sample"])
     parser.add_argument("--resume", type=int, default=0, help='Resume model from checkpoint')
+    parser.add_argument("--loss", type=float, default=0., help='Resume model from checkpoint')
     parser.add_argument("--criterion", type=str, default='MSELoss', choices=criterion_dict.keys())
 
  
@@ -126,8 +132,12 @@ if __name__ == '__main__':
         trainer.train()
     elif args.status == 'test':
         trainer.load(args.resume, args.sampling_timesteps, status=args.status)
-        trainer.evaluate(trainer.val, criterion=trainer.criterion, num_batches=None)
-        # trainer.evaluate(trainer.test, criterion=trainer.criterion, num_batches=None)
+        trainer.evaluate(trainer.val, criterion=trainer.criterion)
+        trainer.evaluate(trainer.test, criterion=trainer.criterion)
 
-        # plot_one_sample(args)
-    
+    else: # sample
+        trainer.load(args.resume, args.sampling_timesteps, status=args.status)
+        trainer.sample(trainer.val, loss=args.loss)
+        
+        plot_sample(args)
+        

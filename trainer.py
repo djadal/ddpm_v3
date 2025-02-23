@@ -110,7 +110,7 @@ class Trainer1D(object):
         self.results_folder.mkdir(exist_ok=True)
 
         self.model_dict_folder = path(self.results_folder, 'model_dicts')
-        # self.outputs_folder = path(self.results_folder, 'outputs')
+        self.samples_folder = path(self.results_folder, 'samples')
         self.evaluation_folder = path(self.results_folder, 'evaluation')
 
         # step counter state
@@ -140,17 +140,35 @@ class Trainer1D(object):
 
         torch.save(data, str(self.model_dict_folder / f'model_{self.model.num_timesteps}_{milestone}.pt'))
 
+    def sample(self, dataloader, loss=0):
+        accelerator = self.accelerator
+        device = accelerator.device
+        self.ema.ema_model.eval()
+        
+        with torch.no_grad():
+            all_samples = []
+            targets = []
 
-    def save_evaluation(self, milestone, samples, target):
+            pbar = tqdm(dataloader, desc="Sampling", leave=True)
+            for i, (cond, target, ref) in enumerate(pbar):
+                cond, target, ref = cond.to(device), target.to(device), ref.to(device)
+
+                sample = self.ema.ema_model.sample(batch_size=cond.shape[0], condition=cond, reference=ref)
+                all_samples.append(sample)
+                targets.append(target)
+                  
+            self.save_samples(loss, torch.cat(all_samples, dim=0), torch.cat(targets, dim=0))
+
+    def save_samples(self, loss, samples, targets):
         if not self.accelerator.is_local_main_process:
             return
 
         output = {
             'samples': samples,
-            'target': target,
+            'target': targets,
         }
 
-        torch.save(output, str(self.evaluation_folder / f'sample_{self.model.num_timesteps}_{milestone}.pt'))
+        torch.save(output, str(self.samples_folder / f'samples_{self.model.num_timesteps}_{loss}.pt'))
 
     def load(self, milestone, sampling_stpes, status='training'):
         accelerator = self.accelerator
@@ -175,23 +193,15 @@ class Trainer1D(object):
         if exists(self.accelerator.scaler) and exists(data['scaler']):
             self.accelerator.scaler.load_state_dict(data['scaler'])
 
-    def evaluate(self, loader, criterion, num_batches=None, milestone=None):
+    def evaluate(self, dataloader, criterion, args):
         accelerator = self.accelerator
         device = accelerator.device
         self.ema.ema_model.eval()
 
-        loader = list(loader)
-
-        if num_batches is None or num_batches > len(loader):
-            num_batches = len(loader)
-
-        val_batches = random.sample(loader, num_batches)
-        checkpoint = random.randint(0, num_batches - 1)
-
         with torch.no_grad():
             eva_loss = 0.
 
-            pbar = tqdm(val_batches, desc="Evaluating", leave=True)
+            pbar = tqdm(dataloader, desc="Evaluating", leave=True)
             for i, (cond, target, ref) in enumerate(pbar):
                 cond, target, ref = cond.to(device), target.to(device), ref.to(device)
 
@@ -201,17 +211,14 @@ class Trainer1D(object):
                 eva_loss += loss.item()
                 pbar.set_description(f'Evaluating (loss: {eva_loss / (pbar.n + 1):.4f})')
                 
-                if self.is_training and i == checkpoint:
-                    self.save_evaluation(milestone, sample, target)
-
-            eva_loss /= num_batches
+            eva_loss /= len(dataloader)
 
             if not self.is_training:
                 with open(self.evaluation_folder / 'format.txt', 'a') as f:
                     f.write(
                             f"Trained for {self.train_num_steps} steps | "
                             f"Sample_steps: {self.model.num_timesteps} | "
-                            f"Evaluation on {num_batches} batches | "
+                            f"Evaluation on {len(dataloader)} batches | "
                             f"test_loss: {eva_loss:.4f} | "
                             f"time: {datetime.datetime.now()}\n"
                             )

@@ -1,11 +1,47 @@
 import os
 import numpy as np
+from scipy.signal import butter, sosfilt, sosfiltfilt
+from typing import Optional, Tuple
 
 import torch
 from torch.utils.data import Dataset
 import warnings
 
 warnings.filterwarnings('ignore')
+
+class Filter:
+    def __init__(self,
+                 filter_type: str = "lowpass",
+                 cutoff: Optional[float] = None,
+                 fs: Optional[float] = None,
+                 order: int = 5) -> None:
+        self.filter_type = filter_type
+        self.cutoff = cutoff
+        self.fs = fs
+        self.order = order
+        self.filter = None
+
+        if self.fs is None:
+            raise ValueError("Sampling frequency must be specified.")
+
+        if filter_type not in ["lowpass", "highpass", "bandpass"]:
+            raise ValueError("filter_type must be 'lowpass', 'highpass', or 'bandpass'.")
+
+        if filter_type in ["lowpass", "highpass"]:
+            if not isinstance(cutoff, (float, int)):
+                raise ValueError("cutoff must be a single frequency for 'lowpass' or 'highpass'.")
+            self.filter = butter(order, cutoff, btype=filter_type, fs=fs, output="sos")
+
+        elif filter_type == "bandpass":
+            if not isinstance(cutoff, (tuple, list)) or len(cutoff) != 2:
+                raise ValueError("cutoff must be a tuple of (low, high) frequencies for 'bandpass'.")
+            self.filter = butter(order, cutoff, btype=filter_type, fs=fs, output="sos")
+
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        if self.filter is None:
+            raise ValueError("Filter is not initialized properly.")
+        else:
+            return sosfiltfilt(self.filter, x, axis=-1)
 
 class RandomCrop:
     """Crop randomly the input sequence.
@@ -47,26 +83,9 @@ def load_data_npy(file_path, crop):
     data_tensor = torch.tensor(data_np, dtype=torch.float32)
     predict_tensor = torch.tensor(predict_np, dtype=torch.float32)
     
-    return data_tensor, predict_tensor
+    return data_tensor, predict_tensor   
 
 
-def slice_sequence(data, seq_len, pred_len, shape):
-    b, c, l = shape
-    n = shape[2] - seq_len - pred_len + 1
-    x = torch.zeros((shape[0], shape[1], n, seq_len), dtype=torch.float32)
-    y = torch.zeros((shape[0], shape[1], n, pred_len), dtype=torch.float32)
-    
-    for i in range(n):
-        x[:, :, i, :] = data[:, :, i:i+seq_len]
-        y[:, :, i, :] = data[:, :, i+seq_len:i+seq_len+pred_len]
-    
-    x = x.transpose(1, 2)
-    y = y.transpose(1, 2)
-    x = x.reshape(b*n, c, seq_len)
-    y = y.reshape(b*n, c, pred_len)    
-    
-    return x, y
-    
 class Dataset_ECG_VIT(Dataset):
     def __init__(self, root_path, flag, dataset= None, ref_path=None, seq_length=1024, random_crop=False):
 
