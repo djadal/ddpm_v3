@@ -43,7 +43,7 @@ if __name__ == '__main__':
     
     # Dataset
     parser.add_argument("--dataset", type=str, default='PTB_XL', choices=["PTB_XL", "CPSC"])
-    parser.add_argument("--data_path", type=str, default="/root/autodl-tmp/DDPM/Dataset/CPSC")
+    parser.add_argument("--data_path", type=str, default="/root/autodl-tmp/DDPM/Dataset")
     parser.add_argument("--ref_path", type=str, default="./VIT_encoder/database")
     
     # Trainer
@@ -64,8 +64,8 @@ if __name__ == '__main__':
     
     # GaussianDiffusion
     parser.add_argument("--length", type=int, default=1024)
-    parser.add_argument("--timesteps", type=int, default=1000)
-    parser.add_argument("--sampling_timesteps", type=int, default=1000, help='Use DDIM Sampling when < timesteps')
+    parser.add_argument("--timesteps", type=int, default=200)
+    parser.add_argument("--sampling_timesteps", type=int, default=200, help='Use DDIM Sampling when < timesteps')
     parser.add_argument("--ddim_eta", type=float, default=0., help='DDIM eta')
     parser.add_argument("--objective", type=str, default="pred_noise", choices=["pred_noise", "pred_x0", "pred_v"])
     parser.add_argument("--beta", type=str, default="cosine", choices=["linear", "cosine"])
@@ -103,12 +103,12 @@ if __name__ == '__main__':
                                 auto_normalize=args.normalize
                                 )
     
-    train_set = Dataset_ECG_VIT(root_path=args.data_path, flag='train', seq_length=args.length, dataset=args.dataset,
-                                ref_path=args.ref_path)
-    val_set = Dataset_ECG_VIT(root_path=args.data_path, flag='val', seq_length=args.length, dataset=args.dataset,
-                              ref_path=args.ref_path)
-    test_set = Dataset_ECG_VIT(root_path=args.data_path, flag='test', seq_length=args.length, dataset=args.dataset,
-                              ref_path=args.ref_path)
+    train_set = Dataset_ECG_VIT(root_path=os.path.join(args.data_path, args.dataset), flag='train', 
+                                seq_length=args.length, dataset=args.dataset, ref_path=args.ref_path)
+    val_set = Dataset_ECG_VIT(root_path=os.path.join(args.data_path, args.dataset), flag='val', 
+                              seq_length=args.length, dataset=args.dataset, ref_path=args.ref_path)
+    test_set = Dataset_ECG_VIT(root_path=os.path.join(args.data_path, args.dataset), flag='test', 
+                               seq_length=args.length, dataset=args.dataset, ref_path=args.ref_path)
     
     trainer = Trainer1D(diffusion_model=model, 
                         train_set=train_set,
