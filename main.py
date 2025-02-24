@@ -20,16 +20,13 @@ def plot_sample(args):
     lead_names = ["III", "aVR", "aVL", "aVF", "V2", "V3", "V4", "V5", "V6"]
 
     samples = output['samples'].cpu()
-    target = output['target'].cpu()
-
-    samples = samples.reshape(-1, *samples.shape[2:])
-    target = target.reshape(-1, *target.shape[2:])
+    targets = output['target'].cpu()
 
     indices = torch.randperm(samples.shape[0])[:min(25, samples.shape[0])]
 
-    for idx in indices:
-        sample, target = samples[idx], target[idx]
-        plt.figure(figsize=(28, 16))
+    for n, idx in enumerate(indices):
+        sample, target = samples[idx], targets[idx]
+        plt.figure(figsize=(32, 16))
         for i in range(9):
             plt.subplot(3, 3, i + 1)
             plt.plot(sample[i], label=f'Sample_{lead_names[i]}', color='red', linewidth=1)
@@ -41,7 +38,7 @@ def plot_sample(args):
 
         plt.tight_layout()
 
-        plt.savefig(f'/root/autodl-tmp/DDPM/Remote/figures/sample_{idx}.png')
+        plt.savefig(f'/root/autodl-tmp/DDPM/Remote/figures/sample_{n}.png')
 
 if __name__ == '__main__':
     

@@ -279,18 +279,11 @@ class ReferenceModulatedCrossAttention(nn.Module):
         self.ref_to_v = nn.Linear(dim + context_dim, inner_dim, bias=False)
 
         self.to_out = nn.Linear(inner_dim, dim)
-        self.context_to_out = nn.Linear(inner_dim, context_dim)
+        # self.context_to_out = nn.Linear(inner_dim, context_dim)
 
         self.talking_heads = nn.Conv2d(heads, heads, 1, bias=False) if talking_heads else nn.Identity()
-        self.context_talking_heads = nn.Conv2d(heads, heads, 1, bias=False) if talking_heads else nn.Identity()
-
-    def forward(
-            self,
-            x,
-            cond_info,
-            reference,
-            return_attn=False,
-    ):
+    
+    def forward(self, x, cond_info, reference):
         # B, C, K, L, h, device = x.shape[0], x.shape[1], x.shape[2], x.shape[-1],
         h = self.heads
 
@@ -298,27 +291,26 @@ class ReferenceModulatedCrossAttention(nn.Module):
         reference = self.norm(reference)
         cond_info = self.context_norm(cond_info)
 
-        reference = repeat(reference, 'b n c -> (b f) n c', f=1)  # (B*C, K, L)
-        q_y = self.y_to_q(x)  # (B*C,K,ND)
+        # reference = repeat(reference, 'b n c -> (b f) n c', f=1)
 
+        q_y = self.y_to_q(x)  # (B*C,K,ND)
         cond = self.cond_to_k(torch.cat((x,cond_info, reference), dim=-1))  # (B*C,K,ND)
         ref = self.ref_to_v(torch.cat((x, reference), dim=-1))  # (B*C,K,ND)
-        q_y, cond, ref = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=h), (q_y, cond, ref))  # (B*C, N, K, D)
+
+        q_y, cond, ref = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=h), (q_y, cond, ref))  
+
         sim = einsum('b h i d, b h j d -> b h i j', cond, ref) * self.scale  # (B*C, N, K, K)
         attn = sim.softmax(dim=-1)
-        context_attn = sim.softmax(dim=-2)
+
         # dropouts
         attn = self.dropout(attn)
-        context_attn = self.context_dropout(context_attn)
         attn = self.talking_heads(attn)
-        context_attn = self.context_talking_heads(context_attn)
         out = einsum('b h i j, b h j d -> b h i d', attn, ref)
-        context_out = einsum('b h j i, b h j d -> b h i d', context_attn, cond)
+
         # merge heads and combine out
-        out, context_out = map(lambda t: rearrange(t, 'b h n d -> b n (h d)'), (out, context_out))
+        # out, context_out = map(lambda t: rearrange(t, 'b h n d -> b n (h d)'), (out, context_out))
+        out = rearrange(out, 'b h n d -> b n (h d)')
         out = self.to_out(out)
-        if return_attn:
-            return out, context_out, attn, context_attn
 
         return out
 

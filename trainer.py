@@ -1,15 +1,13 @@
 from pathlib import Path
 from tqdm import tqdm
-import random
-import os
 import datetime
 from multiprocessing import cpu_count
 
 from torch.optim import Adam
+from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import Dataset, DataLoader
 
 from unet_blocks import *
-from einops.layers.torch import Rearrange
 
 from accelerate import Accelerator
 from ema_pytorch import EMA
@@ -97,6 +95,10 @@ class Trainer1D(object):
 
         # optimizer
         self.opt = Adam(diffusion_model.parameters(), lr=train_lr, betas=adam_betas)
+
+        # learning rate scheduler
+        milestones = [int(0.3 * train_num_steps), int(0.8 * train_num_steps)]
+        self.lr_scheduler = MultiStepLR(self.opt, milestones=milestones, gamma=0.1)
 
         # criterion
         self.criterion = criterion
@@ -257,6 +259,8 @@ class Trainer1D(object):
                 self.opt.step()
                 self.opt.zero_grad()
 
+                self.lr_scheduler.step()
+                
                 accelerator.wait_for_everyone()
 
                 self.step += 1
@@ -268,7 +272,6 @@ class Trainer1D(object):
 
                         with torch.no_grad():
                             milestone = self.step // self.save_and_sample_every + 1
-                            # self.evaluate(self.val, self.criterion, num_batches=10, milestone=milestone)
                             self.save_model(milestone)
 
                 pbar.update(1)
