@@ -126,14 +126,17 @@ if __name__ == '__main__':
                         )
     
     if args.status == 'train':
+        if args.resume != 0:
+            trainer.load(args.resume, args.timesteps, status=args.status)
         trainer.train()
+        
     elif args.status == 'test':
-        trainer.load(args.resume, args.sampling_timesteps, status=args.status)
+        trainer.load(args.resume, args.timesteps, status=args.status)
         trainer.evaluate(trainer.val, criterion=trainer.criterion)
         trainer.evaluate(trainer.test, criterion=trainer.criterion)
 
     else: # sample
-        trainer.load(args.resume, args.sampling_timesteps, status=args.status)
+        trainer.load(args.resume, args.timesteps, status=args.status)
         trainer.sample(trainer.val, loss=args.loss)
         
         plot_sample(args)

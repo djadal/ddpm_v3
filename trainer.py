@@ -97,7 +97,7 @@ class Trainer1D(object):
         self.opt = Adam(diffusion_model.parameters(), lr=train_lr, betas=adam_betas)
 
         # learning rate scheduler
-        milestones = [int(0.3 * train_num_steps), int(0.8 * train_num_steps)]
+        milestones = [int(0.4 * train_num_steps), int(0.9 * train_num_steps)]
         self.lr_scheduler = MultiStepLR(self.opt, milestones=milestones, gamma=0.1)
 
         # criterion
@@ -218,7 +218,7 @@ class Trainer1D(object):
             if not self.is_training:
                 with open(self.evaluation_folder / 'format.txt', 'a') as f:
                     f.write(
-                            f"Trained for {self.train_num_steps} steps | "
+                            f"Trained for {self.step + 1} steps | "
                             f"Sample_steps: {self.model.num_timesteps} | "
                             f"Evaluation on {len(dataloader)} batches | "
                             f"test_loss: {eva_loss:.4f} | "

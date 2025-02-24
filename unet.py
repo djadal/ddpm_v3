@@ -149,8 +149,10 @@ class Unet1D(Module):
         fused_info = torch.cat((feature_embed, time_embed), dim=-1) # -> (B, C, L, t_d+f_d)
 
         if fused_info.size(-1) != 1:
+            fused_info = fused_info.reshape(B * C * L, -1)
             fused_info = self.fusion_layer(fused_info)  # (B, C, L, 1)
             fused_info = fused_info.squeeze(-1)  # (B, C, L)
+            fused_info = fused_info.reshape(B, C, L)
 
         return fused_info
 
@@ -158,8 +160,7 @@ class Unet1D(Module):
         if self.self_condition:
             x = self.init_conv(x, x_self_cond)
             # x = torch.cat((x_self_cond, x), dim=1)  
-     
-        # x = self.init_conv(x)  # x ->(b, init_dim, l)
+
         r = x.clone()  # r -> (b, init_dim, l)
 
         reference = self.ref_mlp(reference)
