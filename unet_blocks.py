@@ -19,8 +19,31 @@ class Residual(Module):
     def forward(self, x, *args, **kwargs):
         return self.fn(x, *args, **kwargs) + x
 
+class FrequencyBlock(Module):
+    def __init__(self, cond_c, noise_c, dim=12, dim_out=16):
+        super().__init__()
+        self.cond_conv = nn.Conv1d(cond_c, dim, 1)
+        self.noise_conv = nn.Conv1d(noise_c, dim, 1)
+        
+        self.fft = FFTBlock(dim_in=dim, dim_out=dim)
+        
+        self.final_conv = nn.Sequential(nn.Conv1d(dim*2, dim_out, 1),
+                                        nn.GELU(),
+                                        nn.Conv1d(dim_out, dim_out, 1))
+        
+        self.act = nn.GELU()
+    
+    def forward(self, noise, cond):
+        noise = self.noise_conv(noise)
+        
+        cond = self.cond_conv(cond)
+        cond = self.fft(cond)
+        
+        x = torch.cat((noise, cond), dim=1)
+        return self.final_conv(x)
+        
 class FFTBlock(Module):
-    def __init__(self, dim_in=16, dim_out=None, patch_size=64, seq=1024):
+    def __init__(self, dim_in=16, dim_out=None, patch_size=128, seq=1024):
         super().__init__()
         self.to_patch = nn.Sequential(Rearrange('b c (n p) -> b c n p', p=patch_size),
                                       nn.LayerNorm(patch_size),

@@ -40,7 +40,8 @@ class Unet1D(Module):
         input_channels = channels
 
         init_dim = default(init_dim, dim)
-        self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3)
+        # self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3)
+        self.init_conv = FrequencyBlock(cond_c=3, noise_c=9, dim=input_channels, dim_out=init_dim)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:], [1024, 512, 256, 128]))  # [(init_dim, init_dim), (init_dim, init_dim*2), ...]
@@ -86,7 +87,6 @@ class Unet1D(Module):
             self.downs.append(ModuleList([
                 resnet_block(dim_in, dim_in),
                 resnet_block(dim_in, dim_in),
-                FFTBlock(dim_in, dim_in, patch_size=int(seq/4), seq=int(seq)),
                 Residual(PreNorm(dim_in, ReferenceModulatedCrossAttention(dim=seq))),
                 Downsample(dim_in, dim_out) if not is_last else nn.Conv1d(dim_in, dim_out, 3, padding=1)
             ]))
@@ -107,7 +107,6 @@ class Unet1D(Module):
             self.ups.append(ModuleList([
                 resnet_block(dim_out + dim_in, dim_out),
                 resnet_block(dim_out + dim_in, dim_out),
-                FFTBlock(dim_out, dim_out, patch_size=int(seq/4), seq=int(seq)),
                 Residual(PreNorm(dim_out, ReferenceModulatedCrossAttention(dim=seq))),
                 Upsample(dim_out, dim_in) if not is_last else nn.Conv1d(dim_out, dim_in, 3, padding=1)
             ]))
@@ -157,10 +156,10 @@ class Unet1D(Module):
 
     def forward(self, x, time, x_self_cond=None, reference=None):
         if self.self_condition:
-            # x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
-            x = torch.cat((x_self_cond, x), dim=1)  # x -> (b, 12, l)
+            x = self.init_conv(x, x_self_cond)
+            # x = torch.cat((x_self_cond, x), dim=1)  
      
-        x = self.init_conv(x)  # x ->(b, init_dim, l)
+        # x = self.init_conv(x)  # x ->(b, init_dim, l)
         r = x.clone()  # r -> (b, init_dim, l)
 
         reference = self.ref_mlp(reference)
@@ -170,7 +169,7 @@ class Unet1D(Module):
         h = []
         ref = []
 
-        for idx, (block1, block2, fft, attn, downsample) in enumerate(self.downs):
+        for idx, (block1, block2, attn, downsample) in enumerate(self.downs):
             x = block1(x, t)
             reference = block1(reference, t)
 
@@ -179,8 +178,6 @@ class Unet1D(Module):
 
             x = block2(x, t)
             reference = block2(reference, t)
-
-            x = fft(x)
 
             x = attn(x, reference=reference, cond_info=self.get_side_info(x.device, x.shape, idx))
 
@@ -194,7 +191,7 @@ class Unet1D(Module):
         x = self.mid_attn(x)
         x = self.mid_block2(x, t)
 
-        for idx, (block1, block2, fft, attn, upsample) in enumerate(self.ups):
+        for idx, (block1, block2, attn, upsample) in enumerate(self.ups):
             x = torch.cat((x, h.pop()), dim=1)
             reference = torch.cat((reference, ref.pop()), dim=1)
 
@@ -206,8 +203,6 @@ class Unet1D(Module):
 
             x = block2(x, t)
             reference = block2(reference, t)
-
-            x = fft(x)
 
             x = attn(x, reference=reference, cond_info=self.get_side_info(x.device, x.shape, idx + len(self.downs)))
             

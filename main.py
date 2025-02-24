@@ -61,7 +61,7 @@ if __name__ == '__main__':
     parser.add_argument("--out_dim", type=int, default=9)
     parser.add_argument("--dim", type=int, default=16)
     parser.add_argument("--in_c", type=int, default=12)
-    parser.add_argument("--dropout", type=float, default=0.2)
+    parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--condition", type=bool, default=True)
     parser.add_argument("--is_random_pe", type=bool, default=False)
     
