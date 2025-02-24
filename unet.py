@@ -42,6 +42,7 @@ class Unet1D(Module):
         init_dim = default(init_dim, dim)
         # self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3)
         self.init_conv = FrequencyBlock(cond_c=3, noise_c=9, dim=input_channels, dim_out=init_dim)
+        self.ref_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:], [1024, 512, 256, 128]))  # [(init_dim, init_dim), (init_dim, init_dim*2), ...]
@@ -164,7 +165,7 @@ class Unet1D(Module):
         r = x.clone()  # r -> (b, init_dim, l)
 
         reference = self.ref_mlp(reference)
-        reference = self.init_conv(reference)
+        reference = self.ref_conv(reference)
         t = self.time_mlp(time)  # t ->(b, 4*init_dim)
 
         h = []
