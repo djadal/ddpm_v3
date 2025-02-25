@@ -88,10 +88,10 @@ def main(config):
 
     cudnn.benchmark = True
     
-    dataset_train = Dataset_ECG_VIT(root_path='C:\\Dataset\\PTB_XL', flag='train')
+    dataset_train = Dataset_ECG_VIT(root_path='/root/autodl-tmp/DDPM/Dataset', flag='train')
     data_loader_train = DataLoader(dataset_train, batch_size=config['batch_size'], shuffle=True)
 
-    dataset_val = Dataset_ECG_VIT(root_path='C:\\Dataset\\PTB_XL', flag='val')
+    dataset_val = Dataset_ECG_VIT(root_path='/root/autodl-tmp/DDPM/Dataset', flag='val')
     data_loader_val = DataLoader(dataset_val, batch_size=config['batch_size'], shuffle=False)
 
     if misc.is_main_process() and config['output_dir']:
@@ -155,9 +155,9 @@ def main(config):
                      device,
                      epoch)
 
-        if output_dir and (epoch % 20 == 0 or epoch + 1 == config['train']['epochs']):
+        if output_dir and ((epoch + 1) % 20 == 0 or (epoch + 1) == config['train']['epochs']):
             misc.save_model(config,
-                            os.path.join(output_dir, f'checkpoint-{epoch}.pth'),
+                            os.path.join(output_dir, f'checkpoint_{epoch}.pth'),
                             epoch,
                             model_without_ddp,
                             optimizer,

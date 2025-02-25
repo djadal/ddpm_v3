@@ -49,7 +49,7 @@ dataloader:
   pin_memory: True
 
 train:
-  epochs: 50
+  epochs: 100
   accum_iter: 1
   warmup_epochs: 3
   val_interval: 2

@@ -51,7 +51,7 @@ def create_ref(model, data_loader, database, ref_num, device, config):
             if config['flag'] == 'train':
                 references.append(idx[1:])
             else:
-                references.append(torch.cat([database.all[i] for i in idx[:ref_num]], dim=1))
+                references.append(torch.cat([database.all[i, :, :1024] for i in idx[:ref_num]], dim=1))
         
         references = torch.cat([t.unsqueeze(0) for t in references], dim=0)
         os.makedirs(config['ref_path'], exist_ok=True)
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     
     parser.add_argument('--task', type=str, default='ref', choices=['embedding', 'ref'])
     parser.add_argument('--flag', type=str, default='train', choices=['train', 'val', 'test'])
-    parser.add_argument('--dataset', type=str, default='CPSC', choices=['PTB_XL', 'CPSC'])
+    parser.add_argument('--dataset', type=str, default='PTB_XL', choices=['PTB_XL', 'CPSC'])
     parser.add_argument('--config_path',
                         default="./configs/downstream/st_mem.yaml",
                         type=str,
